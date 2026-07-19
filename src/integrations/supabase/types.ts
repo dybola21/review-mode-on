@@ -195,6 +195,70 @@ export type Database = {
           },
         ]
       }
+      render_output_targets: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          mime_type: string
+          project_id: string
+          render_job_id: string
+          source_file_id: string | null
+          storage_path: string
+          user_id: string
+          variation_index: number
+          worker_output_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          mime_type?: string
+          project_id: string
+          render_job_id: string
+          source_file_id?: string | null
+          storage_path: string
+          user_id: string
+          variation_index: number
+          worker_output_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          mime_type?: string
+          project_id?: string
+          render_job_id?: string
+          source_file_id?: string | null
+          storage_path?: string
+          user_id?: string
+          variation_index?: number
+          worker_output_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_output_targets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_output_targets_render_job_id_fkey"
+            columns: ["render_job_id"]
+            isOneToOne: false
+            referencedRelation: "render_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_output_targets_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       render_outputs: {
         Row: {
           checksum: string | null
