@@ -18,7 +18,7 @@ import { uploadOutput, UploadError } from "../storage/upload.js";
 import { ensureInsideDir, jobDirName, safeBaseName } from "../storage/paths.js";
 import { buildTemplateOverlay, assertTemplateSafe } from "./template.js";
 import { renderOutput, RenderError } from "./ffmpeg.js";
-import { computeVariationParams } from "./variation.js";
+import { computeVariationParams, computeWatermarkOffset } from "./variation.js";
 import { renewInputUrl, renewUploadUrl } from "../webhook/renew.js";
 import { enqueueWebhook } from "../webhook/sender.js";
 import type { Config } from "../config.js";
