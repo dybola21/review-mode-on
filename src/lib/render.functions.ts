@@ -258,8 +258,12 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       if (aErr) throw clientError("Falha ao ler arquivos do projeto.");
       assetFiles = assets ?? [];
       for (const id of referencedAssetIds) {
-        if (!assetFiles.find((a) => a.id === id)) {
+        const found = assetFiles.find((a) => a.id === id);
+        if (!found) {
           throw clientError("Asset referenciado pelo template não encontrado.");
+        }
+        if (id === templateSettings.logo_file_id && !found.mime_type.startsWith("image/")) {
+          throw clientError("O logo do template precisa ser uma imagem.");
         }
       }
     }
