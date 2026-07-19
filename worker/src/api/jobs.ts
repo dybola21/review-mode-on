@@ -31,7 +31,7 @@ export function registerJobs(
     const parsed = jobPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
       pinoLogger.warn({ issues: parsed.error.issues.length }, "invalid job payload");
-      return reply.code(400).send({ error: "invalid_payload" });
+      console.error("DBG payload issues", JSON.stringify(parsed.error.issues)); return reply.code(400).send({ error: "invalid_payload" });
     }
     const payload = parsed.data;
 
@@ -44,7 +44,7 @@ export function registerJobs(
         assertAllowedUrl(t.signedUploadUrl, cfg.ALLOWED_UPLOAD_HOSTS, "upload", cfg.isProduction);
       }
     } catch {
-      return reply.code(400).send({ error: "url_not_allowed" });
+      console.error("DBG url_not_allowed"); return reply.code(400).send({ error: "url_not_allowed" });
     }
 
     // Enqueue (idempotent).
