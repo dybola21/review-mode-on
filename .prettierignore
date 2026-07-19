@@ -8,3 +8,5 @@ bun.lock
 routeTree.gen.ts
 worker
 
+src/integrations/supabase/types.ts
+src/routeTree.gen.ts

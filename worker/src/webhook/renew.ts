@@ -5,6 +5,9 @@ import { renewInputResponseSchema, renewUploadResponseSchema } from "../types/co
 
 /**
  * Renew endpoints are pre-derived from APP_BASE_URL at config load time.
+ * All requests carry:
+ *   - x-worker-timestamp: epoch seconds (string)
+ *   - x-worker-signature: HMAC-SHA256 hex over `${timestamp}.${rawBody}`
  */
 
 interface RenewCommon {
@@ -18,7 +21,7 @@ async function post<T>(
   body: RenewCommon & Record<string, unknown>,
   cfg: Config,
 ): Promise<T> {
-  const timestamp = new Date().toISOString();
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const raw = JSON.stringify(body);
   const signature = computeHmacHex(cfg.APP_WEBHOOK_SECRET, buildSignatureMessage(timestamp, raw));
   const controller = new AbortController();
@@ -44,6 +47,7 @@ async function post<T>(
 
 export async function renewInputUrl(
   payload: JobPayload,
+  workerJobId: string,
   fileId: string,
   cfg: Config,
 ): Promise<string> {
@@ -51,7 +55,7 @@ export async function renewInputUrl(
     cfg.APP_RENEW_INPUT_URL,
     {
       jobId: payload.jobId,
-      workerJobId: payload.jobId, // not the worker-side id — app matches by jobId
+      workerJobId,
       fileId,
       nonce: newNonce(),
     },
@@ -63,6 +67,7 @@ export async function renewInputUrl(
 
 export async function renewUploadUrl(
   payload: JobPayload,
+  workerJobId: string,
   workerOutputId: string,
   cfg: Config,
 ): Promise<string> {
@@ -70,7 +75,7 @@ export async function renewUploadUrl(
     cfg.APP_RENEW_UPLOAD_URL,
     {
       jobId: payload.jobId,
-      workerJobId: payload.jobId,
+      workerJobId,
       workerOutputId,
       nonce: newNonce(),
     },

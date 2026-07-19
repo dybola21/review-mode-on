@@ -2,13 +2,19 @@
 
 External FFmpeg worker integration. All endpoints under `/api/public/*` are
 callable without a Supabase session and MUST enforce their own auth in the
-handler (HMAC over `${timestamp}.${rawBody}` with
-`VIDEO_WORKER_WEBHOOK_SECRET`, timestamp fresh within ±5 minutes, and a
-per-request nonce persisted in `worker_request_nonces` for replay
-protection).
+handler:
+
+- `x-worker-signature`: HMAC-SHA256 hex over `${timestamp}.${rawBody}` using
+  `VIDEO_WORKER_WEBHOOK_SECRET`.
+- `x-worker-timestamp`: **epoch seconds** as a decimal string. ISO-8601 and
+  millisecond precision are rejected. Freshness window is ±5 minutes.
+- Per-request `nonce` (in the JSON body) persisted in
+  `worker_request_nonces` for replay protection.
 
 The server never sends `SUPABASE_SERVICE_ROLE_KEY` or `storagePath` to the
-worker. The server owns all storage paths.
+worker. The server owns all storage paths. `workerJobId` is the worker-side
+job id returned by `POST /jobs` — the app persists it and requires
+renew/webhook calls to echo it back verbatim.
 
 ## `POST {VIDEO_WORKER_URL}/jobs` (server → worker)
 
@@ -60,9 +66,9 @@ Headers: `x-worker-signature`, `x-worker-timestamp`.
 {
   "eventId": "unique-per-event",
   "eventType": "status_update",
-  "timestamp": "2026-07-19T…",
+  "timestamp": 1721400000,
   "jobId": "uuid",
-  "workerJobId": "worker-side id",
+  "workerJobId": "worker-side id (must match render_jobs.worker_job_id)",
   "status": "queued | processing | completed | failed | cancelled | expired",
   "progress": 0-100,
   "errorCode": "optional",

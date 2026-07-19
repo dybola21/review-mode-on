@@ -34,13 +34,17 @@ describe("hmac", () => {
     expect(timingSafeEqualString("secret", "secret")).toBe(true);
   });
 
-  it("validates ±5min timestamp window", () => {
+  it("validates ±5min timestamp window on epoch seconds", () => {
     const now = Date.now();
-    expect(isTimestampFresh(new Date(now).toISOString(), now)).toBe(true);
-    expect(isTimestampFresh(new Date(now - 4 * 60 * 1000).toISOString(), now)).toBe(true);
-    expect(isTimestampFresh(new Date(now - 6 * 60 * 1000).toISOString(), now)).toBe(false);
-    expect(isTimestampFresh(new Date(now + 6 * 60 * 1000).toISOString(), now)).toBe(false);
+    const s = (ms: number) => String(Math.floor(ms / 1000));
+    expect(isTimestampFresh(s(now), now)).toBe(true);
+    expect(isTimestampFresh(s(now - 4 * 60 * 1000), now)).toBe(true);
+    expect(isTimestampFresh(s(now - 6 * 60 * 1000), now)).toBe(false);
+    expect(isTimestampFresh(s(now + 6 * 60 * 1000), now)).toBe(false);
     expect(isTimestampFresh("not a date", now)).toBe(false);
+    // ISO-8601 and millisecond timestamps are rejected by the unified contract.
+    expect(isTimestampFresh(new Date(now).toISOString(), now)).toBe(false);
+    expect(isTimestampFresh(String(now), now)).toBe(false);
   });
 });
 

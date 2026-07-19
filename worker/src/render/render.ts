@@ -76,7 +76,7 @@ export async function runJob(
     for (const inp of payload.inputFiles) {
       cancel.throwIfAborted();
       heartbeat.check();
-      const dl = await downloadWithRenew(inp, inputDir, payload, cfg);
+      const dl = await downloadWithRenew(inp, inputDir, payload, row.worker_job_id, cfg);
       const probe = await ffprobe(dl.localPath);
       if (inp.fileType !== "template_asset") {
         // template_asset may be an svg/png — validated via mime.
@@ -157,7 +157,7 @@ export async function runJob(
       emitProgress(db, row, stepsDone, totalSteps);
 
       // Upload with renewal on 401/403.
-      await uploadWithRenew(outLocal, target, payload, cfg);
+      await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg);
       db.recordUploadedOutput(
         row.worker_job_id,
         target.workerOutputId,
@@ -250,6 +250,7 @@ async function downloadWithRenew(
   input: InputFile,
   destDir: string,
   payload: JobPayload,
+  workerJobId: string,
   cfg: Config,
 ): Promise<{ localPath: string; bytes: number }> {
   let attempt = 0;
@@ -265,7 +266,7 @@ async function downloadWithRenew(
       });
     } catch (err) {
       if (err instanceof DownloadError && err.code === "input_expired" && attempt <= 2) {
-        const renewed = await renewInputUrl(payload, input.fileId, cfg);
+        const renewed = await renewInputUrl(payload, workerJobId, input.fileId, cfg);
         current = { ...current, signedUrl: renewed };
         continue;
       }
@@ -282,6 +283,7 @@ async function uploadWithRenew(
   localPath: string,
   target: JobPayload["outputTargets"][number],
   payload: JobPayload,
+  workerJobId: string,
   cfg: Config,
 ): Promise<void> {
   let attempt = 0;
@@ -298,7 +300,7 @@ async function uploadWithRenew(
       return;
     } catch (err) {
       if (err instanceof UploadError && err.code === "output_upload_expired" && attempt <= 2) {
-        currentUrl = await renewUploadUrl(payload, target.workerOutputId, cfg);
+        currentUrl = await renewUploadUrl(payload, workerJobId, target.workerOutputId, cfg);
         continue;
       }
       if (err instanceof UploadError && err.transient && attempt <= 3) {

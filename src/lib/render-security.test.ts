@@ -64,6 +64,9 @@ describe("isTimestampFresh", () => {
     expect(isTimestampFresh(null)).toBe(false);
     expect(isTimestampFresh("abc")).toBe(false);
   });
+  it("rejects ISO-8601 (contract is epoch seconds)", () => {
+    expect(isTimestampFresh(new Date(now).toISOString(), now)).toBe(false);
+  });
 });
 
 describe("signature verification", () => {

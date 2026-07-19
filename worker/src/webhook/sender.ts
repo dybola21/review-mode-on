@@ -40,7 +40,7 @@ export function enqueueWebhook(db: QueueDB, ev: WebhookEvent): void {
   const body = {
     eventId: randomUUID(),
     eventType: ev.eventType,
-    timestamp: new Date().toISOString(),
+    timestamp: Math.floor(Date.now() / 1000),
     jobId: ev.jobId,
     workerJobId: ev.workerJobId,
     status: ev.status,
@@ -76,7 +76,7 @@ async function dispatchOne(
   cfg: Config,
   w: { id: string; payload_json: string; attempts: number },
 ): Promise<void> {
-  const timestamp = new Date().toISOString();
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const message = buildSignatureMessage(timestamp, w.payload_json);
   const signature = computeHmacHex(cfg.APP_WEBHOOK_SECRET, message);
   const controller = new AbortController();

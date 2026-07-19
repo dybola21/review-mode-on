@@ -32,17 +32,17 @@ export function timingSafeEqualString(a: string, b: string): boolean {
 }
 
 /** ±5 minute freshness on ISO-8601 or epoch seconds/millis. */
+/**
+ * ±5 minute freshness on epoch seconds (unified contract).
+ * The value must be a non-empty numeric string of seconds since epoch.
+ * ISO-8601 and millisecond precision are rejected on purpose.
+ */
 export function isTimestampFresh(timestamp: string, nowMs: number = Date.now()): boolean {
   if (!timestamp || typeof timestamp !== "string") return false;
-  let t: number;
-  if (/^\d+$/.test(timestamp)) {
-    const n = Number(timestamp);
-    t = n < 1e12 ? n * 1000 : n; // seconds vs millis
-  } else {
-    t = Date.parse(timestamp);
-  }
-  if (!Number.isFinite(t)) return false;
-  return Math.abs(nowMs - t) <= 5 * 60 * 1000;
+  if (!/^\d{1,10}$/.test(timestamp)) return false;
+  const seconds = Number(timestamp);
+  if (!Number.isFinite(seconds)) return false;
+  return Math.abs(nowMs / 1000 - seconds) <= 5 * 60;
 }
 
 export function newNonce(): string {
