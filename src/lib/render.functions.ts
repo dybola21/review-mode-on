@@ -234,6 +234,36 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Envie pelo menos um vídeo antes de processar.");
     }
 
+    // 2b) Assets referenced by the template (logo only for MVP). Never sent
+    //     if not referenced — server derives file_type from project_files.
+    const templateSettings = (project.template_settings ?? {}) as {
+      logo_file_id?: string | null;
+    };
+    const referencedAssetIds = new Set<string>();
+    if (templateSettings.logo_file_id) referencedAssetIds.add(templateSettings.logo_file_id);
+
+    let assetFiles: Array<{
+      id: string;
+      file_name: string;
+      storage_path: string;
+      mime_type: string;
+      file_type: string;
+    }> = [];
+    if (referencedAssetIds.size > 0) {
+      const { data: assets, error: aErr } = await context.supabase
+        .from("project_files")
+        .select("id, file_name, storage_path, mime_type, file_type")
+        .eq("project_id", data.project_id)
+        .in("id", Array.from(referencedAssetIds));
+      if (aErr) throw clientError("Falha ao ler arquivos do projeto.");
+      assetFiles = assets ?? [];
+      for (const id of referencedAssetIds) {
+        if (!assetFiles.find((a) => a.id === id)) {
+          throw clientError("Asset referenciado pelo template não encontrado.");
+        }
+      }
+    }
+
     // 3) Rights
     const { data: rights } = await context.supabase
       .from("rights_confirmations")
