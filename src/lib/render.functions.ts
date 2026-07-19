@@ -303,7 +303,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
 
     // 5) Compute expected outputs
-    const variationCount = Math.max(1, Number(project.variation_count) || 1);
+    // variationCount MUST equal variationSettings.variation_count (worker contract enforces).
+    const variationFromSettings = Number(
+      (project.variation_settings as { variation_count?: unknown } | null)?.variation_count,
+    );
+    const variationCount = Math.max(
+      1,
+      Number.isFinite(variationFromSettings) && variationFromSettings > 0
+        ? Math.floor(variationFromSettings)
+        : Number(project.variation_count) || 1,
+    );
     const totalOutputs = computeMaxOutputs(files.length, variationCount, HARD_MAX_OUTPUTS);
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
