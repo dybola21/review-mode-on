@@ -253,8 +253,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     if (referencedAssetIds.size > 0) {
       const { data: assets, error: aErr } = await context.supabase
         .from("project_files")
-        .select("id, file_name, storage_path, mime_type, file_type")
+        .select("id, file_name, storage_path, mime_type, file_type, status")
         .eq("project_id", data.project_id)
+        .eq("status", "uploaded")
         .in("id", Array.from(referencedAssetIds));
       if (aErr) throw clientError("Falha ao ler arquivos do projeto.");
       assetFiles = assets ?? [];
