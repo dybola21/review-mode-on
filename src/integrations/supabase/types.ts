@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -34,6 +52,56 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      project_files: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_name: string
+          file_size: number
+          file_type: string
+          id: string
+          mime_type: string
+          project_id: string
+          status: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name: string
+          file_size: number
+          file_type: string
+          id?: string
+          mime_type: string
+          project_id: string
+          status?: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          mime_type?: string
+          project_id?: string
+          status?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       projects: {
         Row: {
@@ -70,6 +138,38 @@ export type Database = {
           variation_settings?: Json
         }
         Relationships: []
+      }
+      rights_confirmations: {
+        Row: {
+          confirmation_version: string
+          id: string
+          project_id: string
+          rights_confirmed_at: string
+          user_id: string
+        }
+        Insert: {
+          confirmation_version: string
+          id?: string
+          project_id: string
+          rights_confirmed_at?: string
+          user_id: string
+        }
+        Update: {
+          confirmation_version?: string
+          id?: string
+          project_id?: string
+          rights_confirmed_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rights_confirmations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
