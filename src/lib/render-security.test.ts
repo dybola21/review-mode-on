@@ -39,12 +39,8 @@ describe("publicAppUrlSchema", () => {
 
 describe("normalizePublicAppUrl", () => {
   it("strips trailing slashes", () => {
-    expect(normalizePublicAppUrl("https://app.example.com/")).toBe(
-      "https://app.example.com",
-    );
-    expect(normalizePublicAppUrl("https://app.example.com//")).toBe(
-      "https://app.example.com",
-    );
+    expect(normalizePublicAppUrl("https://app.example.com/")).toBe("https://app.example.com");
+    expect(normalizePublicAppUrl("https://app.example.com//")).toBe("https://app.example.com");
   });
   it("returns null for invalid input", () => {
     expect(normalizePublicAppUrl(undefined)).toBeNull();
@@ -59,20 +55,10 @@ describe("isTimestampFresh", () => {
     expect(isTimestampFresh(String(now / 1000), now)).toBe(true);
   });
   it("rejects timestamps older than 5 min", () => {
-    expect(
-      isTimestampFresh(
-        String(now / 1000 - MAX_WEBHOOK_AGE_SECONDS - 1),
-        now,
-      ),
-    ).toBe(false);
+    expect(isTimestampFresh(String(now / 1000 - MAX_WEBHOOK_AGE_SECONDS - 1), now)).toBe(false);
   });
   it("rejects timestamps too far in the future", () => {
-    expect(
-      isTimestampFresh(
-        String(now / 1000 + MAX_WEBHOOK_AGE_SECONDS + 1),
-        now,
-      ),
-    ).toBe(false);
+    expect(isTimestampFresh(String(now / 1000 + MAX_WEBHOOK_AGE_SECONDS + 1), now)).toBe(false);
   });
   it("rejects non-numeric or missing", () => {
     expect(isTimestampFresh(null)).toBe(false);
@@ -151,12 +137,7 @@ describe("storage paths", () => {
     expect(isPathUnderJob(p, userId, projectId, jobId)).toBe(true);
     expect(isPathUnderJob(p, userId, projectId, "other")).toBe(false);
     expect(
-      isPathUnderJob(
-        `${userId}/${projectId}/${jobId}/../foo.mp4`,
-        userId,
-        projectId,
-        jobId,
-      ),
+      isPathUnderJob(`${userId}/${projectId}/${jobId}/../foo.mp4`, userId, projectId, jobId),
     ).toBe(false);
   });
 });
@@ -182,8 +163,6 @@ describe("sanitizeBaseName", () => {
     expect(sanitizeBaseName("foo bar/baz?.mp4")).toMatch(/^foo_bar_baz_/);
   });
   it("trims length", () => {
-    expect(sanitizeBaseName("a".repeat(200), 20).length).toBeLessThanOrEqual(
-      20,
-    );
+    expect(sanitizeBaseName("a".repeat(200), 20).length).toBeLessThanOrEqual(20);
   });
 });

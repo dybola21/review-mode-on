@@ -53,9 +53,7 @@ export const Route = createFileRoute("/api/public/worker-renew-upload")({
 
         let supabaseAdmin;
         try {
-          ({ supabaseAdmin } = await import(
-            "@/integrations/supabase/client.server"
-          ));
+          ({ supabaseAdmin } = await import("@/integrations/supabase/client.server"));
         } catch (err) {
           console.error("[renew-upload] admin import", err);
           return new Response("Service unavailable", { status: 503 });

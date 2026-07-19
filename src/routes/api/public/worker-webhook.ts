@@ -1,9 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import {
-  isTimestampFresh,
-  verifySignature,
-} from "@/lib/render-security";
+import { isTimestampFresh, verifySignature } from "@/lib/render-security";
 
 /** Only workerOutputId is meaningful here — server owns storagePath. */
 const outputSchema = z.object({
@@ -19,14 +16,7 @@ const webhookSchema = z.object({
   timestamp: z.string().min(1).max(60),
   jobId: z.string().uuid(),
   workerJobId: z.string().min(1).max(200),
-  status: z.enum([
-    "queued",
-    "processing",
-    "completed",
-    "failed",
-    "cancelled",
-    "expired",
-  ]),
+  status: z.enum(["queued", "processing", "completed", "failed", "cancelled", "expired"]),
   progress: z.number().int().min(0).max(100).optional(),
   errorCode: z.string().max(120).optional(),
   errorMessage: z.string().max(500).optional(),
@@ -73,9 +63,7 @@ async function verifyStorageObject(
   if (parts.length < 2) return { exists: false, size: 0 };
   const parent = parts.slice(0, -1).join("/");
   const name = parts[parts.length - 1];
-  const { data } = await admin.storage
-    .from("render-outputs")
-    .list(parent, { search: name });
+  const { data } = await admin.storage.from("render-outputs").list(parent, { search: name });
   const found = (data ?? []).find((o) => o.name === name);
   if (!found) return { exists: false, size: 0 };
   const size = Number(found.metadata?.size ?? 0);
@@ -120,9 +108,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
         let supabaseAdmin;
         try {
-          ({ supabaseAdmin } = await import(
-            "@/integrations/supabase/client.server"
-          ));
+          ({ supabaseAdmin } = await import("@/integrations/supabase/client.server"));
         } catch (err) {
           console.error("[worker-webhook] admin import", err);
           return new Response("Service unavailable", { status: 503 });
@@ -215,9 +201,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
             return new Response("Too many outputs", { status: 400 });
           }
 
-          const targetMap = new Map(
-            targets.map((t) => [t.worker_output_id, t]),
-          );
+          const targetMap = new Map(targets.map((t) => [t.worker_output_id, t]));
 
           const insertedIds: string[] = [];
           let failReason: string | null = null;
@@ -228,10 +212,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               failReason = "unknown_output";
               break;
             }
-            const check = await verifyStorageObject(
-              supabaseAdmin,
-              target.storage_path,
-            );
+            const check = await verifyStorageObject(supabaseAdmin, target.storage_path);
             if (!check.exists) {
               failReason = "missing_upload";
               break;
@@ -271,16 +252,10 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               console.error("[worker-webhook] output insert", insErr);
               // Transient DB error → let worker retry.
               if (insertedIds.length > 0) {
-                await supabaseAdmin
-                  .from("render_outputs")
-                  .delete()
-                  .in("id", insertedIds);
+                await supabaseAdmin.from("render_outputs").delete().in("id", insertedIds);
               }
               // Free nonce so retry is accepted.
-              await supabaseAdmin
-                .from("worker_request_nonces")
-                .delete()
-                .eq("nonce", nonceKey);
+              await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
               return new Response("Service unavailable", { status: 503 });
             }
             insertedIds.push(inserted.id);
@@ -288,10 +263,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
           if (failReason) {
             if (insertedIds.length > 0) {
-              await supabaseAdmin
-                .from("render_outputs")
-                .delete()
-                .in("id", insertedIds);
+              await supabaseAdmin.from("render_outputs").delete().in("id", insertedIds);
             }
             await supabaseAdmin
               .from("render_jobs")
@@ -319,10 +291,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
             .eq("id", job.id);
           if (jobUpdErr) {
             console.error("[worker-webhook] job complete", jobUpdErr);
-            await supabaseAdmin
-              .from("worker_request_nonces")
-              .delete()
-              .eq("nonce", nonceKey);
+            await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
             return new Response("Service unavailable", { status: 503 });
           }
           await supabaseAdmin
@@ -345,8 +314,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
           patch.completed_at = new Date().toISOString();
           patch.error_code = sanitize(evt.errorCode, 120) ?? "worker_error";
           patch.error_message =
-            sanitize(evt.errorMessage, 500) ??
-            "O processamento falhou. Tente novamente.";
+            sanitize(evt.errorMessage, 500) ?? "O processamento falhou. Tente novamente.";
         }
         const { error: updErr } = await supabaseAdmin
           .from("render_jobs")
@@ -354,10 +322,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
           .eq("id", job.id);
         if (updErr) {
           console.error("[worker-webhook] job update", updErr);
-          await supabaseAdmin
-            .from("worker_request_nonces")
-            .delete()
-            .eq("nonce", nonceKey);
+          await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
           return new Response("Service unavailable", { status: 503 });
         }
 

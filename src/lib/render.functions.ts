@@ -27,8 +27,7 @@ function safeErrorMessage(fallback: string, err: unknown): string {
 
 function isProduction(): boolean {
   return (
-    (process.env.NODE_ENV ?? "development") === "production" ||
-    process.env.APP_ENV === "production"
+    (process.env.NODE_ENV ?? "development") === "production" || process.env.APP_ENV === "production"
   );
 }
 
@@ -43,8 +42,7 @@ function getPublicBaseUrl(): string | null {
   if (isProduction()) return null;
   try {
     const req = getRequest();
-    const host =
-      req?.headers.get("x-forwarded-host") ?? req?.headers.get("host");
+    const host = req?.headers.get("x-forwarded-host") ?? req?.headers.get("host");
     if (!host) return null;
     const proto = req?.headers.get("x-forwarded-proto") ?? "http";
     return `${proto}://${host}`;
@@ -111,9 +109,7 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
         configured: true,
         available: ok,
         checkedAt: new Date().toISOString(),
-        message: ok
-          ? "Servidor disponível."
-          : "Resposta inesperada do servidor.",
+        message: ok ? "Servidor disponível." : "Resposta inesperada do servidor.",
       };
     } catch (err) {
       clearTimeout(timer);
@@ -145,9 +141,7 @@ export const getLatestRenderJob = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false })
       .limit(1);
     if (error) {
-      throw clientError(
-        safeErrorMessage("Não foi possível carregar o status.", error),
-      );
+      throw clientError(safeErrorMessage("Não foi possível carregar o status.", error));
     }
     return rows?.[0] ?? null;
   });
@@ -158,15 +152,11 @@ export const listRenderOutputs = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const { data: rows, error } = await context.supabase
       .from("render_outputs")
-      .select(
-        "id, render_job_id, file_name, file_size, mime_type, created_at, expires_at",
-      )
+      .select("id, render_job_id, file_name, file_size, mime_type, created_at, expires_at")
       .eq("project_id", data.project_id)
       .order("created_at", { ascending: false });
     if (error) {
-      throw clientError(
-        safeErrorMessage("Não foi possível carregar os resultados.", error),
-      );
+      throw clientError(safeErrorMessage("Não foi possível carregar os resultados.", error));
     }
     return rows ?? [];
   });
@@ -190,18 +180,14 @@ export const getSignedDownloadUrl = createServerFn({ method: "POST" })
       throw clientError("Resultado indisponível ou expirado.");
     }
 
-    const { supabaseAdmin } = await import(
-      "@/integrations/supabase/client.server"
-    );
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: signed, error: sErr } = await supabaseAdmin.storage
       .from("render-outputs")
       .createSignedUrl(row.storage_path, SIGNED_DOWNLOAD_TTL_SECONDS, {
         download: row.file_name,
       });
     if (sErr || !signed) {
-      throw clientError(
-        safeErrorMessage("Resultado indisponível ou expirado.", sErr),
-      );
+      throw clientError(safeErrorMessage("Resultado indisponível ou expirado.", sErr));
     }
     return { url: signed.signedUrl };
   });
@@ -221,9 +207,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     // Callback URL FIRST — hard fail in prod if PUBLIC_APP_URL missing.
     if (isProduction() && !normalizePublicAppUrl(process.env.PUBLIC_APP_URL)) {
-      throw clientError(
-        "PUBLIC_APP_URL não configurada — processamento indisponível.",
-      );
+      throw clientError("PUBLIC_APP_URL não configurada — processamento indisponível.");
     }
     const baseUrl = getPublicBaseUrl();
     if (!baseUrl) {
@@ -234,9 +218,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 1) Project
     const { data: project, error: projectErr } = await context.supabase
       .from("projects")
-      .select(
-        "id, status, template_settings, variation_settings, variation_count",
-      )
+      .select("id, status, template_settings, variation_settings, variation_count")
       .eq("id", data.project_id)
       .maybeSingle();
     if (projectErr || !project) throw clientError("Projeto não encontrado.");
@@ -272,9 +254,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       latestFile?.[0] &&
       new Date(latestFile[0].created_at) > new Date(rights.rights_confirmed_at)
     ) {
-      throw clientError(
-        "Reconfirme os direitos: novos arquivos foram adicionados.",
-      );
+      throw clientError("Reconfirme os direitos: novos arquivos foram adicionados.");
     }
 
     // 4) Active job?
@@ -290,24 +270,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     // 5) Compute expected outputs
     const variationCount = Math.max(1, Number(project.variation_count) || 1);
-    const totalOutputs = computeMaxOutputs(
-      files.length,
-      variationCount,
-      HARD_MAX_OUTPUTS,
-    );
+    const totalOutputs = computeMaxOutputs(files.length, variationCount, HARD_MAX_OUTPUTS);
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
     if (totalOutputs >= HARD_MAX_OUTPUTS) {
-      throw clientError(
-        "Combinação de arquivos e variações excede o limite permitido.",
-      );
+      throw clientError("Combinação de arquivos e variações excede o limite permitido.");
     }
 
     // 6) Create job
-    const { supabaseAdmin } = await import(
-      "@/integrations/supabase/client.server"
-    );
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let jobId: string;
     try {
@@ -352,9 +324,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     const targets: Target[] = [];
     try {
       for (const f of files) {
-        const base = sanitizeBaseName(
-          (f.file_name ?? "video").replace(/\.[^.]+$/, ""),
-        );
+        const base = sanitizeBaseName((f.file_name ?? "video").replace(/\.[^.]+$/, ""));
         for (let v = 1; v <= variationCount; v++) {
           const workerOutputId = crypto.randomUUID();
           const storagePath = buildOutputStoragePath({
@@ -375,21 +345,19 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         }
       }
 
-      const { error: tErr } = await supabaseAdmin
-        .from("render_output_targets")
-        .insert(
-          targets.map((t) => ({
-            render_job_id: jobId,
-            project_id: data.project_id,
-            user_id: context.userId,
-            worker_output_id: t.workerOutputId,
-            file_name: t.fileName,
-            storage_path: t.storagePath,
-            mime_type: t.mimeType,
-            source_file_id: t.sourceFileId,
-            variation_index: t.variationIndex,
-          })),
-        );
+      const { error: tErr } = await supabaseAdmin.from("render_output_targets").insert(
+        targets.map((t) => ({
+          render_job_id: jobId,
+          project_id: data.project_id,
+          user_id: context.userId,
+          worker_output_id: t.workerOutputId,
+          file_name: t.fileName,
+          storage_path: t.storagePath,
+          mime_type: t.mimeType,
+          source_file_id: t.sourceFileId,
+          variation_index: t.variationIndex,
+        })),
+      );
       if (tErr) throw new Error(`targets insert: ${tErr.message}`);
     } catch (err) {
       console.error("[submitRenderJob] targets", err);
@@ -494,10 +462,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     } catch (err) {
       clearTimeout(timer);
       console.error("[submitRenderJob] worker", err);
-      await failJob(
-        "worker_unreachable",
-        "Servidor temporariamente indisponível.",
-      );
+      await failJob("worker_unreachable", "Servidor temporariamente indisponível.");
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
@@ -513,10 +478,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       .eq("id", jobId);
     if (updErr) console.error("[submitRenderJob] update", updErr);
 
-    await supabaseAdmin
-      .from("projects")
-      .update({ status: "processing" })
-      .eq("id", data.project_id);
+    await supabaseAdmin.from("projects").update({ status: "processing" }).eq("id", data.project_id);
 
     return { job_id: jobId };
   });

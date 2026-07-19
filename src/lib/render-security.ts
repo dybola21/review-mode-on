@@ -88,14 +88,8 @@ export function isTimestampFresh(
 // -----------------------------------------------------------------------
 // HMAC signature
 // -----------------------------------------------------------------------
-export function computeSignature(
-  secret: string,
-  timestamp: string,
-  rawBody: string,
-): string {
-  return createHmac("sha256", secret)
-    .update(`${timestamp}.${rawBody}`)
-    .digest("hex");
+export function computeSignature(secret: string, timestamp: string, rawBody: string): string {
+  return createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
 }
 
 export function verifySignature(
@@ -177,7 +171,6 @@ export function computeMaxOutputs(
   variationCount: number,
   hardCap = 400,
 ): number {
-  const n = Math.max(0, Math.floor(sourceCount)) *
-    Math.max(0, Math.floor(variationCount));
+  const n = Math.max(0, Math.floor(sourceCount)) * Math.max(0, Math.floor(variationCount));
   return Math.min(n, hardCap);
 }
