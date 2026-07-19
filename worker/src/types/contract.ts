@@ -77,7 +77,7 @@ export const jobPayloadSchema = z
     outputTargets: z.array(outputTargetSchema).min(1).max(400),
     templateSettings: templateSettingsSchema,
     variationSettings: variationSettingsSchema,
-    variationCount: z.number().int().min(1).max(50),
+    variationCount: z.number().int().min(1).max(100),
     uploadTtlSeconds: z
       .number()
       .int()
