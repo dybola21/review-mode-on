@@ -66,9 +66,9 @@ Headers: `x-worker-signature`, `x-worker-timestamp`.
 {
   "eventId": "unique-per-event",
   "eventType": "status_update",
-  "timestamp": "2026-07-19T…",
+  "timestamp": 1721400000,
   "jobId": "uuid",
-  "workerJobId": "worker-side id",
+  "workerJobId": "worker-side id (must match render_jobs.worker_job_id)",
   "status": "queued | processing | completed | failed | cancelled | expired",
   "progress": 0-100,
   "errorCode": "optional",
