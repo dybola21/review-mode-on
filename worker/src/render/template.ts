@@ -70,8 +70,8 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
   const videoAreaHeight = height - headerHeight;
 
   const pageName = safeText(t.page_name, 80);
-  const identifier = safeText(t.identifier, 80);
-  const headline = safeText(t.headline, 200);
+  const identifier = safeText(t.identifier, 60);
+  const headline = safeText(t.headline, 160);
   const bg = safeColor(t.background_color, "#0F0F12");
   const fg = safeColor(t.text_color, "#FFFFFF");
   const accent = safeColor(t.accent_color, "#FF5A1F");

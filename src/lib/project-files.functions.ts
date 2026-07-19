@@ -15,7 +15,7 @@ function clientError(msg: string): Error {
 const idSchema = z.object({ id: z.string().uuid() });
 const projectIdSchema = z.object({ project_id: z.string().uuid() });
 
-const fileTypeEnum = z.enum(["source_video", "logo", "music", "template_asset"]);
+const fileTypeEnum = z.enum(["source_video", "logo", "template_asset"]);
 
 const prepareUploadSchema = z.object({
   project_id: z.string().uuid(),
@@ -25,20 +25,9 @@ const prepareUploadSchema = z.object({
   file_type: fileTypeEnum,
 });
 
-const confirmUploadSchema = z.object({
-  id: z.string().uuid(),
-  duration_seconds: z
-    .number()
-    .finite()
-    .min(0)
-    .max(60 * 60 * 6)
-    .optional(),
-});
-
 const BUCKETS = {
   source_video: "project-inputs",
   logo: "project-assets",
-  music: "project-assets",
   template_asset: "project-assets",
 } as const;
 
@@ -84,6 +73,7 @@ export const listProjectFiles = createServerFn({ method: "GET" })
         "id, file_name, storage_path, file_type, mime_type, file_size, duration_seconds, status, created_at",
       )
       .eq("project_id", data.project_id)
+      .eq("status", "uploaded")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("[listProjectFiles]", error);
@@ -92,17 +82,12 @@ export const listProjectFiles = createServerFn({ method: "GET" })
     return files ?? [];
   });
 
-// ----- preparar upload: valida e cria signed upload URL -----
+// ----- preparar upload: valida, cria linha pendente e signed upload URL -----
 export const prepareProjectFileUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => prepareUploadSchema.parse(data))
   .handler(async ({ data, context }) => {
     await assertProjectOwner(context.supabase, data.project_id);
-
-    // Música foi removida do contrato ativo nesta versão.
-    if (data.file_type === "music") {
-      throw clientError("Áudio não é suportado nesta versão.");
-    }
 
     const settings = await loadSettings(context.supabase);
     const maxBytes = settings.max_file_size_mb * 1024 * 1024;
@@ -121,21 +106,16 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     }
 
     const safeName = sanitizeFileName(data.file_name);
-
-    if (
-      (data.file_type === "source_video" ||
-        data.file_type === "logo" ||
-        data.file_type === "template_asset") &&
-      !extensionMatchesMime(safeName, data.mime_type)
-    ) {
+    if (!extensionMatchesMime(safeName, data.mime_type)) {
       throw clientError("A extensão não corresponde ao tipo do arquivo.");
     }
 
-    // Limite de quantidade
+    // Limite de quantidade — só conta arquivos confirmados + pendentes ativos.
     const { count, error: countError } = await context.supabase
       .from("project_files")
       .select("id", { count: "exact", head: true })
-      .eq("project_id", data.project_id);
+      .eq("project_id", data.project_id)
+      .in("status", ["uploaded", "pending"]);
     if (countError) {
       console.error("[prepareProjectFileUpload] count", countError);
       throw clientError("Erro ao validar limite de arquivos.");
@@ -148,15 +128,32 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const fileId = crypto.randomUUID();
     const storagePath = `${context.userId}/${data.project_id}/${fileId}/${safeName}`;
 
-    // Insere registro placeholder em project_files com status 'uploaded' → false
-    // Só criaremos o registro após o upload confirmado (via confirmProjectFile).
-    // Aqui, geramos apenas uma signed upload URL.
-    const { data: signed, error: signedError } = await context.supabase.storage
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Cria linha pendente com metadata canônica derivada no servidor.
+    const { error: insErr } = await supabaseAdmin.from("project_files").insert({
+      id: fileId,
+      project_id: data.project_id,
+      user_id: context.userId,
+      file_name: safeName,
+      storage_path: storagePath,
+      file_type: data.file_type,
+      mime_type: data.mime_type,
+      file_size: data.file_size,
+      status: "pending",
+    });
+    if (insErr) {
+      console.error("[prepareProjectFileUpload] insert pending", insErr);
+      throw clientError("Não foi possível preparar o upload.");
+    }
+
+    const { data: signed, error: signedError } = await supabaseAdmin.storage
       .from(bucket)
       .createSignedUploadUrl(storagePath);
 
     if (signedError || !signed) {
       console.error("[prepareProjectFileUpload] signed", signedError);
+      await supabaseAdmin.from("project_files").delete().eq("id", fileId);
       throw clientError("Não foi possível preparar o upload.");
     }
 
@@ -170,82 +167,55 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     };
   });
 
-// ----- confirmar upload: valida objeto e cria registro -----
+// ----- confirmar upload: valida objeto e transiciona pending → uploaded -----
 const confirmSchema = z.object({
   project_id: z.string().uuid(),
   file_id: z.string().uuid(),
-  file_name: z.string().max(255),
-  storage_path: z.string().max(500),
-  bucket: z.enum(["project-inputs", "project-assets"]),
-  file_type: fileTypeEnum,
-  mime_type: z.string().max(120),
-  file_size: z.number().int().positive(),
 });
 
 export const confirmProjectFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => confirmSchema.parse(data))
   .handler(async ({ data, context }) => {
-    await assertProjectOwner(context.supabase, data.project_id);
+    // Server-owned lookup: NEVER trust client-supplied metadata.
+    const { data: row, error: findErr } = await context.supabase
+      .from("project_files")
+      .select("id, project_id, storage_path, file_type, status, user_id")
+      .eq("id", data.file_id)
+      .eq("project_id", data.project_id)
+      .maybeSingle();
+    if (findErr || !row) throw clientError("Registro de upload não encontrado.");
+    if (row.user_id !== context.userId) throw clientError("Registro de upload não encontrado.");
+    if (row.status === "uploaded") return { id: row.id };
+    if (row.status !== "pending") throw clientError("Upload em estado inválido.");
 
-    // Confere que o path começa com userId/projectId/fileId/
-    const expectedPrefix = `${context.userId}/${data.project_id}/${data.file_id}/`;
-    if (!data.storage_path.startsWith(expectedPrefix)) {
-      throw clientError("Caminho de armazenamento inválido.");
-    }
+    const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
+    if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
 
-    // Verifica se o objeto realmente existe no Storage do usuário
-    const parts = data.storage_path.split("/");
+    const parts = row.storage_path.split("/");
     const parentPath = parts.slice(0, -1).join("/");
     const objectName = parts[parts.length - 1];
-    const { data: listed, error: listError } = await context.supabase.storage
-      .from(data.bucket)
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: listed, error: listError } = await supabaseAdmin.storage
+      .from(bucket)
       .list(parentPath, { search: objectName });
     if (listError) {
       console.error("[confirmProjectFile] list", listError);
       throw clientError("Não foi possível confirmar o upload.");
     }
     const found = (listed ?? []).find((o) => o.name === objectName);
-    if (!found) {
-      throw clientError("Upload não encontrado no armazenamento.");
-    }
+    if (!found) throw clientError("Upload não encontrado no armazenamento.");
 
-    const { data: inserted, error } = await context.supabase
+    const { error: updErr } = await supabaseAdmin
       .from("project_files")
-      .insert({
-        project_id: data.project_id,
-        user_id: context.userId,
-        file_name: data.file_name,
-        storage_path: data.storage_path,
-        file_type: data.file_type,
-        mime_type: data.mime_type,
-        file_size: data.file_size,
-        status: "uploaded",
-      })
-      .select("id")
-      .single();
-
-    if (error || !inserted) {
-      console.error("[confirmProjectFile] insert", error);
-      // Rollback: tenta apagar o arquivo órfão
-      await context.supabase.storage.from(data.bucket).remove([data.storage_path]);
+      .update({ status: "uploaded" })
+      .eq("id", row.id)
+      .eq("status", "pending");
+    if (updErr) {
+      console.error("[confirmProjectFile] update", updErr);
       throw clientError("Não foi possível registrar o arquivo.");
     }
-
-    return { id: inserted.id };
-  });
-
-// ----- atualizar duração/status opcional -----
-export const updateProjectFileMeta = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => confirmUploadSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    const patch: { duration_seconds?: number } = {};
-    if (data.duration_seconds !== undefined) patch.duration_seconds = data.duration_seconds;
-    if (Object.keys(patch).length === 0) return { ok: true };
-    const { error } = await context.supabase.from("project_files").update(patch).eq("id", data.id);
-    if (error) console.error("[updateProjectFileMeta]", error);
-    return { ok: true };
+    return { id: row.id };
   });
 
 // ----- excluir arquivo -----
@@ -255,7 +225,7 @@ export const deleteProjectFile = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { data: file, error: findError } = await context.supabase
       .from("project_files")
-      .select("id, project_id, storage_path, file_type")
+      .select("id, project_id, storage_path, file_type, user_id")
       .eq("id", data.id)
       .maybeSingle();
 
@@ -264,19 +234,19 @@ export const deleteProjectFile = createServerFn({ method: "POST" })
       throw clientError("Não foi possível excluir o arquivo.");
     }
     if (!file) throw clientError("Arquivo não encontrado.");
+    if (file.user_id !== context.userId) throw clientError("Arquivo não encontrado.");
 
     const bucket = BUCKETS[file.file_type as keyof typeof BUCKETS];
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
 
-    const { error: rmError } = await context.supabase.storage
-      .from(bucket)
-      .remove([file.storage_path]);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error: rmError } = await supabaseAdmin.storage.from(bucket).remove([file.storage_path]);
     if (rmError) {
       console.error("[deleteProjectFile] storage", rmError);
       throw clientError("Falha ao excluir do armazenamento.");
     }
 
-    const { error: delError } = await context.supabase
+    const { error: delError } = await supabaseAdmin
       .from("project_files")
       .delete()
       .eq("id", data.id);
@@ -304,7 +274,8 @@ export const getProjectFilePreviewUrl = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error || !file) throw clientError("Arquivo não encontrado.");
     const bucket = BUCKETS[file.file_type as keyof typeof BUCKETS];
-    const { data: signed, error: sErr } = await context.supabase.storage
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: signed, error: sErr } = await supabaseAdmin.storage
       .from(bucket)
       .createSignedUrl(file.storage_path, 60 * 15);
     if (sErr || !signed) throw clientError("Não foi possível gerar URL.");

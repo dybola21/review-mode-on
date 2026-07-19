@@ -282,6 +282,21 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     }
     expect(sawLogo).toBe(true);
 
+    // 4b) Headline text is drawn in the lower portion of the video area:
+    //     look for near-white pixels in a band above the bottom of the
+    //     frame. The text is white (#FFFFFF) with a dark stroke, so at
+    //     least one bright pixel must exist in that band.
+    let sawHeadline = false;
+    const headlineTop = Math.floor(H * 0.75);
+    const headlineBottom = Math.floor(H * 0.95);
+    for (let y = headlineTop; y < headlineBottom && !sawHeadline; y += 2) {
+      for (let x = Math.floor(W * 0.1); x < Math.floor(W * 0.9) && !sawHeadline; x += 3) {
+        const p = pixel(frame, W, x, y);
+        if (p[0] > 220 && p[1] > 220 && p[2] > 220) sawHeadline = true;
+      }
+    }
+    expect(sawHeadline).toBe(true);
+
     // 5) Watermark (red logo, faded) appears in the bottom-right quadrant
     //    below the header. Jitter shifts a few px but stays inside the frame.
     let sawWatermark = false;

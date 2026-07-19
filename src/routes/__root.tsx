@@ -13,6 +13,11 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
+import { assertBrowserSupabaseKeyIsPublishable } from "@/lib/supabase-key-guard";
+
+// Fail loudly at module load if a service-role key ever leaks into the
+// client bundle. This runs in both SSR and browser bundles.
+assertBrowserSupabaseKeyIsPublishable();
 
 function NotFoundComponent() {
   return (

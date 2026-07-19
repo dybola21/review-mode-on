@@ -97,19 +97,16 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
       } catch {
         body = null;
       }
-      const ok =
-        !!body &&
-        typeof body === "object" &&
-        ("status" in body
-          ? (body as { status?: string }).status === "ok"
-          : "ok" in body
-            ? (body as { ok?: boolean }).ok === true
-            : true);
+      const parsed = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const statusOk = parsed?.status === "ok";
+      const ffmpegOk = parsed?.ffmpeg === true;
+      const queueOk = parsed?.queue === "ready";
+      const ok = statusOk && ffmpegOk && queueOk;
       return {
         configured: true,
         available: ok,
         checkedAt: new Date().toISOString(),
-        message: ok ? "Servidor disponível." : "Resposta inesperada do servidor.",
+        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg ou fila).",
       };
     } catch (err) {
       clearTimeout(timer);
@@ -226,9 +223,10 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 2) Source files
     const { data: files, error: filesErr } = await context.supabase
       .from("project_files")
-      .select("id, file_name, storage_path, mime_type, file_type")
+      .select("id, file_name, storage_path, mime_type, file_type, status")
       .eq("project_id", data.project_id)
-      .eq("file_type", "source_video");
+      .eq("file_type", "source_video")
+      .eq("status", "uploaded");
     if (filesErr) throw clientError("Falha ao ler arquivos do projeto.");
     if (!files || files.length === 0) {
       throw clientError("Envie pelo menos um vídeo antes de processar.");
@@ -252,8 +250,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     if (referencedAssetIds.size > 0) {
       const { data: assets, error: aErr } = await context.supabase
         .from("project_files")
-        .select("id, file_name, storage_path, mime_type, file_type")
+        .select("id, file_name, storage_path, mime_type, file_type, status")
         .eq("project_id", data.project_id)
+        .eq("status", "uploaded")
         .in("id", Array.from(referencedAssetIds));
       if (aErr) throw clientError("Falha ao ler arquivos do projeto.");
       assetFiles = assets ?? [];
@@ -317,7 +316,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
-    if (totalOutputs >= HARD_MAX_OUTPUTS) {
+    if (totalOutputs > HARD_MAX_OUTPUTS) {
       throw clientError("Combinação de arquivos e variações excede o limite permitido.");
     }
 
@@ -548,7 +547,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
-    // 11) Mark queued
+    // 11) Mark queued — race-safe: only if still 'submitting'. If the
+    //     worker already sent a webhook that advanced us to 'processing'
+    //     or a terminal state, we do NOT regress.
     const { error: updErr } = await supabaseAdmin
       .from("render_jobs")
       .update({
@@ -557,8 +558,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         attempt_count: 1,
         started_at: new Date().toISOString(),
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .eq("status", "submitting");
     if (updErr) console.error("[submitRenderJob] update", updErr);
+
+    // Ensure worker_job_id is bound even if state advanced past 'submitting'.
+    await supabaseAdmin
+      .from("render_jobs")
+      .update({ worker_job_id: workerJobId })
+      .eq("id", jobId)
+      .is("worker_job_id", null);
 
     await supabaseAdmin.from("projects").update({ status: "processing" }).eq("id", data.project_id);
 

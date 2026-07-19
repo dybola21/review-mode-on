@@ -24,8 +24,8 @@ const webhookSchema = z.object({
 });
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  submitting: ["queued", "failed"],
-  queued: ["processing", "failed", "cancelled"],
+  submitting: ["queued", "processing", "failed"],
+  queued: ["queued", "processing", "failed", "cancelled"],
   processing: ["processing", "completed", "failed", "cancelled"],
   completed: [],
   failed: [],
@@ -202,16 +202,29 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
           }
 
           const targetMap = new Map(targets.map((t) => [t.worker_output_id, t]));
+          const reportedIds = new Set(evt.outputs.map((o) => o.workerOutputId));
+
+          // Exact-set: outputs count MUST match expected targets AND every
+          // expected id must be reported. Unknown ids reject the payload.
+          if (evt.outputs.length !== targets.length) {
+            return new Response("Output set mismatch", { status: 400 });
+          }
+          for (const t of targets) {
+            if (!reportedIds.has(t.worker_output_id)) {
+              return new Response("Output set mismatch", { status: 400 });
+            }
+          }
+          for (const out of evt.outputs) {
+            if (!targetMap.has(out.workerOutputId)) {
+              return new Response("Unknown output", { status: 400 });
+            }
+          }
 
           const insertedIds: string[] = [];
           let failReason: string | null = null;
 
           for (const out of evt.outputs) {
-            const target = targetMap.get(out.workerOutputId);
-            if (!target) {
-              failReason = "unknown_output";
-              break;
-            }
+            const target = targetMap.get(out.workerOutputId)!;
             const check = await verifyStorageObject(supabaseAdmin, target.storage_path);
             if (!check.exists) {
               failReason = "missing_upload";
@@ -221,7 +234,6 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               failReason = "empty_upload";
               break;
             }
-            // Idempotent per target
             const { data: existing } = await supabaseAdmin
               .from("render_outputs")
               .select("id")
@@ -250,11 +262,9 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               .single();
             if (insErr || !inserted) {
               console.error("[worker-webhook] output insert", insErr);
-              // Transient DB error → let worker retry.
               if (insertedIds.length > 0) {
                 await supabaseAdmin.from("render_outputs").delete().in("id", insertedIds);
               }
-              // Free nonce so retry is accepted.
               await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
               return new Response("Service unavailable", { status: 503 });
             }
@@ -281,23 +291,23 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
             return new Response("ok", { status: 200 });
           }
 
-          const { error: jobUpdErr } = await supabaseAdmin
-            .from("render_jobs")
-            .update({
-              status: "completed",
-              progress: 100,
-              completed_at: new Date().toISOString(),
-            })
-            .eq("id", job.id);
-          if (jobUpdErr) {
-            console.error("[worker-webhook] job complete", jobUpdErr);
+          // Atomic completion: transitions only if the expected output set
+          // is fully present in DB and the job is still non-terminal.
+          const { data: finalized, error: finErr } = await supabaseAdmin.rpc(
+            "finalize_render_job",
+            { _job_id: job.id },
+          );
+          if (finErr) {
+            console.error("[worker-webhook] finalize", finErr);
             await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
             return new Response("Service unavailable", { status: 503 });
           }
-          await supabaseAdmin
-            .from("projects")
-            .update({ status: "completed" })
-            .eq("id", job.project_id);
+          if (!finalized) {
+            // Race: another observer finalized or the set doesn't match.
+            // Release nonce so worker can retry with a fresh eventId if needed.
+            await supabaseAdmin.from("worker_request_nonces").delete().eq("nonce", nonceKey);
+            return new Response("Not finalizable", { status: 409 });
+          }
           return new Response("ok", { status: 200 });
         }
 
