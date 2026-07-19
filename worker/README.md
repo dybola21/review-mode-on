@@ -84,7 +84,7 @@ Todas validadas com Zod no boot. Falta ou valor fraco derruba o processo.
 | -------------------------- | :---------: | ------------------------------------------------- |
 | `PORT`                     |     não     | Porta HTTP (default 3000).                        |
 | `WORKER_API_KEY`           |   **sim**   | Bearer usado pelo Lovable (mín. 32 chars).        |
-| `APP_WEBHOOK_URL`          |   **sim**   | URL do endpoint `/api/public/worker-webhook`.     |
+| `APP_BASE_URL`             |   **sim**   | Origem HTTPS do Lovable app (sem path/query/fragment/credenciais, sem barra final). Os endpoints `worker-webhook`, `worker-renew-input` e `worker-renew-upload` são derivados automaticamente. `APP_WEBHOOK_URL` (legado) é rejeitado no boot. |
 | `APP_WEBHOOK_SECRET`       |   **sim**   | HMAC dos webhooks (mín. 32 chars).                |
 | `WORKER_PUBLIC_URL`        |     não     | URL pública do worker (uso informativo).          |
 | `DATA_DIR`                 |     não     | Volume persistente (default `/data`).             |
