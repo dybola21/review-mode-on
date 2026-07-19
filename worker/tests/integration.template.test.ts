@@ -319,7 +319,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
 
   it("fails cleanly with template_logo_invalid when logo file is not a valid image", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-badlogo-"));
-    const bogus = path.join(dir, "logo.png");
+    const bogus = path.join(dir, "logo.bogus");
     fs.writeFileSync(bogus, "not-an-image");
     await expect(
       buildTemplateOverlay({
