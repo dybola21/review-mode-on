@@ -351,6 +351,27 @@ export type Database = {
           },
         ]
       }
+      worker_request_nonces: {
+        Row: {
+          created_at: string
+          expires_at: string
+          nonce: string
+          purpose: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          nonce: string
+          purpose: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          nonce?: string
+          purpose?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
