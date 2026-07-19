@@ -4,14 +4,8 @@ import { computeHmacHex, buildSignatureMessage, newNonce } from "../security/hma
 import { renewInputResponseSchema, renewUploadResponseSchema } from "../types/contract.js";
 
 /**
- * Renew endpoints live on the same Lovable app under /api/public/. We
- * derive their URLs by swapping the trailing path of APP_WEBHOOK_URL.
+ * Renew endpoints are pre-derived from APP_BASE_URL at config load time.
  */
-function renewUrl(cfg: Config, name: "worker-renew-input" | "worker-renew-upload"): string {
-  const u = new URL(cfg.APP_WEBHOOK_URL);
-  u.pathname = u.pathname.replace(/worker-webhook$/, name);
-  return u.toString();
-}
 
 interface RenewCommon {
   jobId: string;
