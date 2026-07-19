@@ -46,16 +46,7 @@ const BUCKETS = {
   template_asset: "project-assets",
 } as const;
 
-async function loadSettings(
-  supabase: {
-    from: (t: "app_settings") => {
-      select: (s: string) => Promise<{
-        data: { key: string; value: unknown }[] | null;
-        error: unknown;
-      }>;
-    };
-  },
-): Promise<AppSettings> {
+async function loadSettings(supabase: SB): Promise<AppSettings> {
   const { data } = await supabase.from("app_settings").select("key, value");
   const map = new Map<string, unknown>();
   for (const r of data ?? []) map.set(r.key, r.value);
@@ -91,21 +82,7 @@ async function loadSettings(
 }
 
 async function assertProjectOwner(
-  supabase: {
-    from: (t: "projects") => {
-      select: (s: string) => {
-        eq: (
-          c: string,
-          v: string,
-        ) => {
-          maybeSingle: () => Promise<{
-            data: { id: string } | null;
-            error: unknown;
-          }>;
-        };
-      };
-    };
-  },
+  supabase: SB,
   projectId: string,
 ): Promise<void> {
   const { data, error } = await supabase
@@ -115,6 +92,7 @@ async function assertProjectOwner(
     .maybeSingle();
   if (error || !data) throw clientError("Projeto não encontrado.");
 }
+
 
 // ----- listar arquivos -----
 export const listProjectFiles = createServerFn({ method: "GET" })
