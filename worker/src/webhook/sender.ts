@@ -40,7 +40,7 @@ export function enqueueWebhook(db: QueueDB, ev: WebhookEvent): void {
   const body = {
     eventId: randomUUID(),
     eventType: ev.eventType,
-    timestamp: new Date().toISOString(),
+    timestamp: Math.floor(Date.now() / 1000),
     jobId: ev.jobId,
     workerJobId: ev.workerJobId,
     status: ev.status,
