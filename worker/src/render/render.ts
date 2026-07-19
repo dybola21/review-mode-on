@@ -76,7 +76,7 @@ export async function runJob(
     for (const inp of payload.inputFiles) {
       cancel.throwIfAborted();
       heartbeat.check();
-      const dl = await downloadWithRenew(inp, inputDir, payload, cfg);
+      const dl = await downloadWithRenew(inp, inputDir, payload, row.worker_job_id, cfg);
       const probe = await ffprobe(dl.localPath);
       if (inp.fileType !== "template_asset") {
         // template_asset may be an svg/png — validated via mime.
