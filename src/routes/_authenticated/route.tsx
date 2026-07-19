@@ -25,12 +25,8 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
-  const { user } = Route.useRouteContext();
+  const { user, queryClient } = Route.useRouteContext();
   const navigate = useNavigate();
-  const { queryClient } = Route.useRouteContext() as unknown as {
-    user: { email?: string };
-    queryClient: { cancelQueries: () => Promise<void>; clear: () => void };
-  };
 
   async function handleSignOut() {
     try {
