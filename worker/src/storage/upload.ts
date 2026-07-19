@@ -54,10 +54,10 @@ export async function uploadOutput(
         "content-type": mimeType || "application/octet-stream",
         "content-length": String(stat.size),
       },
-      // ReadableStream is accepted by undici; cast is intentional.
-      body: stream as unknown as BodyInit,
+      // undici accepts Node Readable streams via duplex:"half".
+      body: stream as unknown as ReadableStream<Uint8Array>,
       signal: controller.signal,
-      // @ts-expect-error — undici-specific opt allowing stream bodies.
+      // @ts-expect-error undici extension
       duplex: "half",
     });
   } catch (err) {

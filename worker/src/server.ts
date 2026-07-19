@@ -39,8 +39,10 @@ async function main(): Promise<void> {
   registerJobs(app, db, cfg, () => ready);
 
   app.setErrorHandler((err, _req, reply) => {
-    pinoLogger.warn({ err: err.message }, "fastify error");
-    reply.status(err.statusCode ?? 500).send({ error: "internal_error" });
+    const msg = err instanceof Error ? err.message : "internal";
+    pinoLogger.warn({ err: msg }, "fastify error");
+    const status = (err as { statusCode?: number })?.statusCode ?? 500;
+    reply.status(status).send({ error: "internal_error" });
   });
 
   const address = await app.listen({ host: "0.0.0.0", port: cfg.PORT });
