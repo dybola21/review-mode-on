@@ -20,10 +20,15 @@ ENV NODE_ENV=production \
     NPM_CONFIG_UPDATE_NOTIFIER=false \
     NPM_CONFIG_FUND=false
 
-# ffmpeg + ffprobe + fonts for template rendering
+# ffmpeg + ffprobe + fonts for template rendering.
+# librsvg2-bin (rsvg-convert) is REQUIRED — we rasterize template SVGs with it
+# because Debian's ffmpeg build does not include the SVG decoder.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core ca-certificates tini \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends ffmpeg librsvg2-bin fonts-dejavu-core ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && ffmpeg -version >/dev/null \
+ && ffprobe -version >/dev/null \
+ && rsvg-convert --version >/dev/null
 
 WORKDIR /app
 

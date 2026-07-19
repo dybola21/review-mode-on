@@ -28,8 +28,8 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "invalid hex color");
 export const templateSettingsSchema = z
   .object({
     page_name: z.string().max(80).default(""),
-    identifier: z.string().max(80).default(""),
-    headline: z.string().max(200).default(""),
+    identifier: z.string().max(60).default(""),
+    headline: z.string().max(160).default(""),
     logo_file_id: z.string().uuid().nullable().optional(),
     background_color: hexColor.default("#0F0F12"),
     text_color: hexColor.default("#FFFFFF"),
@@ -62,7 +62,7 @@ export const variationSettingsSchema = z
     temperature: minMax(-15, 15),
     scale: minMax(1.0, 1.1),
     watermark_position_jitter: z.boolean().default(false),
-    variation_count: z.number().int().min(1).max(50).default(1),
+    variation_count: z.number().int().min(1).max(100).default(1),
   })
   .strict();
 
@@ -77,14 +77,18 @@ export const jobPayloadSchema = z
     outputTargets: z.array(outputTargetSchema).min(1).max(400),
     templateSettings: templateSettingsSchema,
     variationSettings: variationSettingsSchema,
-    variationCount: z.number().int().min(1).max(50),
+    variationCount: z.number().int().min(1).max(100),
     uploadTtlSeconds: z
       .number()
       .int()
       .min(60)
       .max(24 * 3600),
   })
-  .strict();
+  .strict()
+  .refine((p) => p.variationCount === p.variationSettings.variation_count, {
+    message: "variationCount must equal variationSettings.variation_count",
+    path: ["variationCount"],
+  });
 
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
 export type InputFile = z.infer<typeof inputFileSchema>;

@@ -41,10 +41,13 @@ jobs:
           node-version: "22"
           cache: "npm"
           cache-dependency-path: worker/package-lock.json
-      - name: Install FFmpeg for integration tests
+      - name: Install FFmpeg and librsvg (required for template SVG rasterization)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg librsvg2-bin
+          ffmpeg -version >/dev/null
+          ffprobe -version >/dev/null
+          rsvg-convert --version >/dev/null
       - name: Install dependencies (npm ci)
         run: npm ci
       - name: Prettier check

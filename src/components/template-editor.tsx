@@ -4,10 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
-import {
-  getProjectFilePreviewUrl,
-  listProjectFiles,
-} from "@/lib/project-files.functions";
+import { getProjectFilePreviewUrl, listProjectFiles } from "@/lib/project-files.functions";
 import {
   DEFAULT_TEMPLATE_SETTINGS,
   templateSettingsSchema,
@@ -100,7 +97,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
                 className="input"
                 value={tpl.identifier}
                 onChange={(e) => set("identifier", e.target.value)}
-                maxLength={80}
+                maxLength={60}
                 placeholder="@usuario"
               />
             </Field>
@@ -111,7 +108,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
               className="input min-h-[64px]"
               value={tpl.headline}
               onChange={(e) => set("headline", e.target.value)}
-              maxLength={200}
+              maxLength={160}
             />
           </Field>
 

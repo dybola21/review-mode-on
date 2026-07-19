@@ -268,22 +268,29 @@ function guessImageMime(absPath: string, buf: Buffer): string | null {
   return null;
 }
 
+/**
+ * Rasterize SVG to PNG using `rsvg-convert` (librsvg2-bin).
+ * We depend on librsvg explicitly — Debian's default ffmpeg build does NOT
+ * include SVG decoder support, so relying on `ffmpeg -i in.svg out.png`
+ * silently degrades in production. The Dockerfile and CI both install
+ * `librsvg2-bin` and assert its presence at build time.
+ */
 function rasterizeSvg(svgPath: string, pngPath: string, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    const args = ["-y", "-nostdin", "-loglevel", "error", "-i", svgPath, pngPath];
-    const child = spawn("ffmpeg", args, { shell: false });
+    const args = ["--format=png", "--output", pngPath, svgPath];
+    const child = spawn("rsvg-convert", args, { shell: false });
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      reject(new Error("template_ffmpeg_timeout"));
+      reject(new Error("template_rasterize_timeout"));
     }, timeoutMs);
     child.on("error", () => {
       clearTimeout(timer);
-      reject(new Error("template_ffmpeg_spawn_failed"));
+      reject(new Error("template_rasterize_spawn_failed"));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       if (code === 0) return resolve();
-      reject(new Error("template_ffmpeg_failed"));
+      reject(new Error("template_rasterize_failed"));
     });
   });
 }

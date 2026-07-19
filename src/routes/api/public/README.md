@@ -55,11 +55,11 @@ Sent by `submitRenderJob`. Idempotency-Key header equals `jobId`.
     "header_height_ratio": "0..0.4 (fraction of 1920)"
   },
   "variationSettings": {
-    "brightness":  { "min": -0.2, "max": 0.2 },
-    "contrast":    { "min": 0.8,  "max": 1.2 },
-    "saturation":  { "min": 0.8,  "max": 1.2 },
-    "temperature": { "min": -15,  "max": 15  },
-    "scale":       { "min": 1.0,  "max": 1.1 },
+    "brightness": { "min": -0.2, "max": 0.2 },
+    "contrast": { "min": 0.8, "max": 1.2 },
+    "saturation": { "min": 0.8, "max": 1.2 },
+    "temperature": { "min": -15, "max": 15 },
+    "scale": { "min": 1.0, "max": 1.1 },
     "watermark_position_jitter": false,
     "variation_count": 3
   },

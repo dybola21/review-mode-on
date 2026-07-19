@@ -43,7 +43,7 @@ const base = {
     watermark_position_jitter: false,
     variation_count: 3,
   },
-  variationCount: 1,
+  variationCount: 3,
   uploadTtlSeconds: 3600,
 };
 
@@ -73,5 +73,34 @@ describe("jobPayloadSchema", () => {
   it("rejects non-url signedUrl", () => {
     const bad = { ...base, inputFiles: [{ ...base.inputFiles[0]!, signedUrl: "not a url" }] };
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+  it("rejects mismatched variationCount vs variationSettings.variation_count", () => {
+    const bad = { ...base, variationCount: 2 };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+  it("enforces canonical string limits (identifier<=60, headline<=160, page_name<=80)", () => {
+    const overIdent = {
+      ...base,
+      templateSettings: { ...base.templateSettings, identifier: "a".repeat(61) },
+    };
+    expect(jobPayloadSchema.safeParse(overIdent).success).toBe(false);
+    const overHead = {
+      ...base,
+      templateSettings: { ...base.templateSettings, headline: "b".repeat(161) },
+    };
+    expect(jobPayloadSchema.safeParse(overHead).success).toBe(false);
+    const overPage = {
+      ...base,
+      templateSettings: { ...base.templateSettings, page_name: "c".repeat(81) },
+    };
+    expect(jobPayloadSchema.safeParse(overPage).success).toBe(false);
+  });
+  it("accepts variation_count up to 100", () => {
+    const ok = {
+      ...base,
+      variationSettings: { ...base.variationSettings, variation_count: 100 },
+      variationCount: 100,
+    };
+    expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
   });
 });
