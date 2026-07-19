@@ -43,7 +43,7 @@ const base = {
     watermark_position_jitter: false,
     variation_count: 3,
   },
-  variationCount: 1,
+  variationCount: 3,
   uploadTtlSeconds: 3600,
 };
 
