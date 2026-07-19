@@ -84,7 +84,11 @@ export const jobPayloadSchema = z
       .min(60)
       .max(24 * 3600),
   })
-  .strict();
+  .strict()
+  .refine((p) => p.variationCount === p.variationSettings.variation_count, {
+    message: "variationCount must equal variationSettings.variation_count",
+    path: ["variationCount"],
+  });
 
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
 export type InputFile = z.infer<typeof inputFileSchema>;
