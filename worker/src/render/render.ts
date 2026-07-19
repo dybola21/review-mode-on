@@ -125,10 +125,20 @@ export async function runJob(
     // Watermark jitter budget: up to 4% of frame width.
     const jitterBudget = Math.round(OUT_W * 0.04);
 
-    // 3) Render outputs, one at a time.
+    // 3) Render outputs, one at a time. Skip outputs already uploaded
+    //    in a previous run (worker restart recovery).
+    const alreadyUploaded = new Set(
+      db.listUploadedOutputs(row.worker_job_id).map((o) => o.worker_output_id),
+    );
     for (const target of payload.outputTargets) {
       cancel.throwIfAborted();
       heartbeat.check();
+
+      if (alreadyUploaded.has(target.workerOutputId)) {
+        stepsDone += 2;
+        emitProgress(db, row, stepsDone, totalSteps);
+        continue;
+      }
 
       const idx = payload.outputTargets.indexOf(target);
       const perSource = payload.variationCount;
