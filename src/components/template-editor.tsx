@@ -5,10 +5,11 @@ import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
 import {
-  defaultTemplateSettings,
+  DEFAULT_TEMPLATE_SETTINGS,
   templateSettingsSchema,
   type TemplateSettings,
 } from "@/lib/project-schemas";
+
 
 export function TemplateEditor({
   projectId,
