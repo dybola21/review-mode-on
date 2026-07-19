@@ -76,7 +76,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error("worker failed to start:", (err as Error)?.message ?? err);
   process.exit(1);
 });
