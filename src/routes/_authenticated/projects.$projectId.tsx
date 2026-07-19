@@ -207,6 +207,7 @@ function EditProjectPage() {
             maxVariations={settingsQuery.data.max_variations}
           />
           <RightsSection projectId={projectId} />
+          <RenderSection projectId={projectId} />
         </div>
       )}
 
