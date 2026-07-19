@@ -240,9 +240,7 @@ export const deleteProjectFile = createServerFn({ method: "POST" })
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error: rmError } = await supabaseAdmin.storage
-      .from(bucket)
-      .remove([file.storage_path]);
+    const { error: rmError } = await supabaseAdmin.storage.from(bucket).remove([file.storage_path]);
     if (rmError) {
       console.error("[deleteProjectFile] storage", rmError);
       throw clientError("Falha ao excluir do armazenamento.");

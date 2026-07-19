@@ -97,8 +97,7 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
       } catch {
         body = null;
       }
-      const parsed =
-        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const parsed = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
       const statusOk = parsed?.status === "ok";
       const ffmpegOk = parsed?.ffmpeg === true;
       const queueOk = parsed?.queue === "ready";
