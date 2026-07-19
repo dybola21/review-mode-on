@@ -42,12 +42,6 @@ function ResultsErrorBoundary({
     </div>
   );
 }
-  notFoundComponent: () => (
-    <div className="mx-auto max-w-2xl px-6 py-10 text-center">
-      <h1 className="text-lg font-semibold">Sem resultados</h1>
-    </div>
-  ),
-});
 
 function formatSize(bytes: number | null) {
   if (!bytes) return "—";
