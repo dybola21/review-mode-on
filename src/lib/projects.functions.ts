@@ -85,16 +85,13 @@ export const updateProject = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => updateProjectSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { id, ...rest } = data;
-    // Allowlist: nunca deixe o cliente enviar user_id ou statuses de servidor.
+    // Allowlist: nunca deixe o cliente enviar user_id, template_settings,
+    // variation_settings ou variation_count por aqui — cada um tem seu
+    // próprio server-fn validado.
     const patch: TablesUpdate<"projects"> = {};
     if (rest.name !== undefined) patch.name = rest.name;
     if (rest.status !== undefined) patch.status = rest.status;
-    if (rest.template_settings !== undefined)
-      patch.template_settings = rest.template_settings as TablesUpdate<"projects">["template_settings"];
-    if (rest.variation_settings !== undefined)
-      patch.variation_settings = rest.variation_settings as TablesUpdate<"projects">["variation_settings"];
-    if (rest.variation_count !== undefined)
-      patch.variation_count = rest.variation_count;
+
 
     if (Object.keys(patch).length === 0) {
       throw toClientError("Nada para atualizar.");
