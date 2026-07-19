@@ -48,18 +48,17 @@ export async function uploadOutput(
   const stream = fs.createReadStream(localPath);
   let res: Response;
   try {
-    res = await fetch(url, {
+    const init: RequestInit & { duplex?: "half" } = {
       method: "PUT",
       headers: {
         "content-type": mimeType || "application/octet-stream",
         "content-length": String(stat.size),
       },
-      // undici accepts Node Readable streams via duplex:"half".
       body: stream as unknown as ReadableStream<Uint8Array>,
       signal: controller.signal,
-      // @ts-expect-error undici extension
       duplex: "half",
-    });
+    };
+    res = await fetch(url, init);
   } catch (err) {
     clearTimeout(timer);
     if ((err as { name?: string })?.name === "AbortError") {
