@@ -29,7 +29,7 @@ Sent by `submitRenderJob`. Idempotency-Key header equals `jobId`.
     {
       "fileId": "uuid",
       "fileName": "safe-name.mp4",
-      "fileType": "source_video | logo | music | template_asset",
+      "fileType": "source_video | logo | template_asset",
       "mimeType": "video/mp4",
       "signedUrl": "https://…"
     }
@@ -42,21 +42,57 @@ Sent by `submitRenderJob`. Idempotency-Key header equals `jobId`.
       "signedUploadUrl": "https://…"
     }
   ],
-  "templateSettings": { "…": "asset references use fileId only" },
-  "variationSettings": { "…": "…" },
+  "templateSettings": {
+    "page_name": "string ≤ 80",
+    "identifier": "string ≤ 80",
+    "headline": "string ≤ 200",
+    "logo_file_id": "uuid | null (must match an inputFiles.fileId when set)",
+    "background_color": "#RRGGBB",
+    "text_color": "#RRGGBB",
+    "accent_color": "#RRGGBB",
+    "watermark_position": "top-left | top-right | bottom-left | bottom-right",
+    "watermark_opacity": "0..1",
+    "header_height_ratio": "0..0.4 (fraction of 1920)"
+  },
+  "variationSettings": {
+    "brightness":  { "min": -0.2, "max": 0.2 },
+    "contrast":    { "min": 0.8,  "max": 1.2 },
+    "saturation":  { "min": 0.8,  "max": 1.2 },
+    "temperature": { "min": -15,  "max": 15  },
+    "scale":       { "min": 1.0,  "max": 1.1 },
+    "watermark_position_jitter": false,
+    "variation_count": 3
+  },
   "variationCount": 3,
   "uploadTtlSeconds": 7200
 }
 ```
 
-`fileType` comes from `project_files` (never client-supplied). Only assets
+`fileType` comes from `project_files` (never client-supplied). Music is NOT
+part of this contract version — no audio inputs are accepted. Only assets
 actually referenced by `templateSettings` are included. `outputTargets`
 length equals `sourceCount × variationCount`, hard-capped at 400.
 
-On definitive POST failure the server marks the job `failed`, removes this
-job's `render_output_targets` and any partial objects under
-`<userId>/<projectId>/<jobId>/` in the `render-outputs` bucket. Other jobs
-are never affected.
+### Rendering rules (canonical)
+
+- Output is always `1080×1920` (portrait, `yuv420p`, `h264`).
+- The top `header_height_ratio × 1920` pixels are reserved for the header:
+  background rectangle in `background_color`, accent underline in
+  `accent_color`, logo (when `logo_file_id` set), `page_name` and
+  `identifier` in `text_color`. Video is scaled/cropped to fill the
+  remaining area — it is never covered by the header.
+- `headline` is drawn over the lower portion of the video area, centered,
+  in `text_color` with a `background_color` stroke for legibility.
+- `logo_file_id` MUST reference an image input (`image/*` MIME). A missing
+  or non-image logo fails the job with `template_logo_invalid`.
+- The logo is also composed as the watermark. Size ≈ 15% of frame width.
+- `watermark_opacity` is applied via `colorchannelmixer=aa=<opacity>`.
+- `watermark_position_jitter=true` adds a deterministic per-output offset
+  derived from `sha256(jobId|workerOutputId|variationIndex|wm)`, bounded to
+  ±4% of frame width and clamped to keep the mark fully inside the frame.
+- Variation temperature is expressed in UI units `[-15, 15]` and mapped
+  linearly to the ffmpeg `colorbalance` range `[-0.1, 0.1]` inside the
+  worker (0 stays 0).
 
 ## `POST /api/public/worker-webhook` (worker → server)
 
