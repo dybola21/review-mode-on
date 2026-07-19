@@ -173,31 +173,6 @@ function EditProjectPage() {
           />
         </div>
 
-        <div>
-          <label
-            htmlFor="variations"
-            className="mb-1.5 block text-sm font-medium text-foreground"
-          >
-            Quantidade de variações
-          </label>
-          <input
-            id="variations"
-            type="number"
-            min={1}
-            max={100}
-            value={variationCount}
-            onChange={(e) =>
-              setVariationCount(
-                Math.max(1, Math.min(100, Number(e.target.value) || 1)),
-              )
-            }
-            className="w-32 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Quantas versões editoriais serão geradas por vídeo (entre 1 e 100).
-          </p>
-        </div>
-
         <div className="flex justify-end border-t border-border pt-4">
           <button
             onClick={() => saveMut.mutate()}
@@ -214,13 +189,33 @@ function EditProjectPage() {
         </div>
       </div>
 
+      {settingsQuery.data && (
+        <div className="mt-6 space-y-6">
+          <ProjectFilesSection
+            projectId={projectId}
+            settings={settingsQuery.data}
+          />
+          <TemplateEditor
+            projectId={projectId}
+            initial={project.template_settings}
+          />
+          <VariationsEditor
+            projectId={projectId}
+            initial={project.variation_settings}
+            currentCount={project.variation_count ?? 1}
+            maxVariations={settingsQuery.data.max_variations}
+          />
+          <RightsSection projectId={projectId} />
+        </div>
+      )}
+
       <div className="surface-card mt-6 space-y-4 border-destructive/30 p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-destructive">
           Zona de perigo
         </h2>
         <p className="text-sm text-muted-foreground">
-          Excluir remove o projeto permanentemente. Vídeos e resultados
-          associados também serão apagados nas próximas fases.
+          Excluir remove o projeto permanentemente, junto com todos os
+          arquivos enviados.
         </p>
         {!confirmDelete ? (
           <button
@@ -255,13 +250,7 @@ function EditProjectPage() {
           </div>
         )}
       </div>
-
-      <div className="surface-card mt-6 border-dashed p-6 text-sm text-muted-foreground">
-        <p>
-          Upload de vídeos, templates de identidade visual e configuração de
-          variações serão disponibilizados na próxima fase.
-        </p>
-      </div>
     </div>
   );
 }
+
