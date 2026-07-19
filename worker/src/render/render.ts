@@ -47,9 +47,15 @@ export async function runJob(
   }
   const payload = parsed.data;
 
-  // Validate template + variation settings (opaque -> partial schema).
-  const template = templateSettingsSchema.parse(payload.templateSettings ?? {});
-  const variation = variationSettingsSchema.parse(payload.variationSettings ?? {});
+  // Validate template + variation settings.
+  const templateResult = templateSettingsSchema.safeParse(payload.templateSettings);
+  const variationResult = variationSettingsSchema.safeParse(payload.variationSettings);
+  if (!templateResult.success || !variationResult.success) {
+    fail(db, row, "invalid_template", "Template ou variação inválidos.");
+    return;
+  }
+  const template = templateResult.data;
+  const variation = variationResult.data;
   try {
     assertTemplateSafe(template);
   } catch {
