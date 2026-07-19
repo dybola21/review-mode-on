@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+
 import type { QueueDB, QueueRow } from "../queue/db.js";
 import type { JobPayload, InputFile } from "../types/contract.js";
 import {
