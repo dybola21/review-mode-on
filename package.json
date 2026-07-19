@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src/",
+    "test": "bun test src",
     "format": "prettier --write ."
   },
   "dependencies": {
