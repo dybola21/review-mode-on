@@ -20,7 +20,7 @@ export function TemplateEditor({
 }) {
   const parsed = templateSettingsSchema.safeParse(initial);
   const [tpl, setTpl] = useState<TemplateSettings>(
-    parsed.success ? parsed.data : defaultTemplateSettings(),
+    parsed.success ? parsed.data : DEFAULT_TEMPLATE_SETTINGS,
   );
 
   const saveFn = useServerFn(updateTemplateSettings);
