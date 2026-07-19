@@ -139,6 +139,122 @@ export type Database = {
         }
         Relationships: []
       }
+      render_jobs: {
+        Row: {
+          attempt_count: number
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          progress: number
+          project_id: string
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          worker_job_id: string | null
+        }
+        Insert: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          progress?: number
+          project_id: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          worker_job_id?: string | null
+        }
+        Update: {
+          attempt_count?: number
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          progress?: number
+          project_id?: string
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          worker_job_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      render_outputs: {
+        Row: {
+          checksum: string | null
+          created_at: string
+          expires_at: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          mime_type: string
+          project_id: string
+          render_job_id: string
+          storage_path: string
+          user_id: string
+          worker_output_id: string | null
+        }
+        Insert: {
+          checksum?: string | null
+          created_at?: string
+          expires_at?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string
+          project_id: string
+          render_job_id: string
+          storage_path: string
+          user_id: string
+          worker_output_id?: string | null
+        }
+        Update: {
+          checksum?: string | null
+          created_at?: string
+          expires_at?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string
+          project_id?: string
+          render_job_id?: string
+          storage_path?: string
+          user_id?: string
+          worker_output_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "render_outputs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "render_outputs_render_job_id_fkey"
+            columns: ["render_job_id"]
+            isOneToOne: false
+            referencedRelation: "render_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rights_confirmations: {
         Row: {
           confirmation_version: string

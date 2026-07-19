@@ -19,6 +19,7 @@ import { ProjectFilesSection } from "@/components/project-files-section";
 import { TemplateEditor } from "@/components/template-editor";
 import { VariationsEditor } from "@/components/variations-editor";
 import { RightsSection } from "@/components/rights-section";
+import { RenderSection } from "@/components/render-section";
 
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
@@ -206,6 +207,7 @@ function EditProjectPage() {
             maxVariations={settingsQuery.data.max_variations}
           />
           <RightsSection projectId={projectId} />
+          <RenderSection projectId={projectId} />
         </div>
       )}
 
