@@ -377,7 +377,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      finalize_render_job: { Args: { _job_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
