@@ -10,24 +10,38 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId/result
     meta: [{ title: "Resultados — Editor em Massa" }],
   }),
   component: ResultsPage,
-  errorComponent: ({ error, reset }) => {
-    const router = useRouter();
-    return (
-      <div className="mx-auto max-w-2xl px-6 py-10 text-center">
-        <h1 className="text-lg font-semibold">Erro ao carregar</h1>
-        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
-        <button
-          onClick={() => {
-            router.invalidate();
-            reset();
-          }}
-          className="mt-4 rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Tentar novamente
-        </button>
-      </div>
-    );
-  },
+  errorComponent: ResultsErrorBoundary,
+  notFoundComponent: () => (
+    <div className="mx-auto max-w-2xl px-6 py-10 text-center">
+      <h1 className="text-lg font-semibold">Sem resultados</h1>
+    </div>
+  ),
+});
+
+function ResultsErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <div className="mx-auto max-w-2xl px-6 py-10 text-center">
+      <h1 className="text-lg font-semibold">Erro ao carregar</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      <button
+        onClick={() => {
+          router.invalidate();
+          reset();
+        }}
+        className="mt-4 rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+      >
+        Tentar novamente
+      </button>
+    </div>
+  );
+}
   notFoundComponent: () => (
     <div className="mx-auto max-w-2xl px-6 py-10 text-center">
       <h1 className="text-lg font-semibold">Sem resultados</h1>
