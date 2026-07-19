@@ -17,6 +17,16 @@ jobs:
           bun-version: latest
       - name: Install dependencies (frozen lockfile)
         run: bun install --frozen-lockfile
+      - name: Guard — no secret keys under VITE_* env
+        run: |
+          # VITE_ vars are inlined into the browser bundle. A service-role
+          # key or sb_secret_* key here would leak to every client.
+          if grep -RIn -E "VITE_[A-Z0-9_]*(SERVICE_ROLE|SECRET_KEY|sb_secret_)" \
+              --include="*.ts" --include="*.tsx" --include="*.js" \
+              --include=".env*" src .env .env.example 2>/dev/null; then
+            echo "SECURITY: VITE_* variable references secret material"
+            exit 1
+          fi
       - name: Prettier check
         run: bunx prettier --check .
       - name: Lint
