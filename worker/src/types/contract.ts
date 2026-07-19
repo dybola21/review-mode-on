@@ -28,8 +28,8 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "invalid hex color");
 export const templateSettingsSchema = z
   .object({
     page_name: z.string().max(80).default(""),
-    identifier: z.string().max(80).default(""),
-    headline: z.string().max(200).default(""),
+    identifier: z.string().max(60).default(""),
+    headline: z.string().max(160).default(""),
     logo_file_id: z.string().uuid().nullable().optional(),
     background_color: hexColor.default("#0F0F12"),
     text_color: hexColor.default("#FFFFFF"),
