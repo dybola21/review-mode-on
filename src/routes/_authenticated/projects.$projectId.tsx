@@ -31,6 +31,40 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   ),
 });
 
+function EditProjectErrorBoundary({
+  error,
+  reset,
+}: {
+  error: Error;
+  reset: () => void;
+}) {
+  const router = useRouter();
+  return (
+    <div className="mx-auto max-w-2xl px-6 py-10 text-center">
+      <h1 className="text-lg font-semibold">Não foi possível carregar</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      <div className="mt-6 flex justify-center gap-2">
+        <button
+          onClick={() => {
+            router.invalidate();
+            reset();
+          }}
+          className="rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground"
+        >
+          Tentar novamente
+        </button>
+        <Link
+          to="/dashboard"
+          className="rounded-md border border-border bg-surface px-4 py-2 text-sm"
+        >
+          Voltar
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+
 function EditProjectPage() {
   const { projectId } = Route.useParams();
   const qc = useQueryClient();
