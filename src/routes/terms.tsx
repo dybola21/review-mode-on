@@ -19,22 +19,19 @@ function TermsPage() {
       <h1 className="text-3xl font-semibold">Termos de Uso</h1>
       <div className="mt-6 space-y-4 text-sm text-muted-foreground">
         <p>
-          O Editor em Massa é uma ferramenta para geração de variações
-          editoriais em lote de vídeos <strong>de sua propriedade</strong> ou
-          para os quais você possui autorização válida.
+          O Editor em Massa é uma ferramenta para geração de variações editoriais em lote de vídeos{" "}
+          <strong>de sua propriedade</strong> ou para os quais você possui autorização válida.
         </p>
         <p>
-          Você é integralmente responsável por garantir que possui os direitos
-          sobre todo o conteúdo enviado, incluindo vídeos, imagens, logotipos,
-          textos e áudios.
+          Você é integralmente responsável por garantir que possui os direitos sobre todo o conteúdo
+          enviado, incluindo vídeos, imagens, logotipos, textos e áudios.
         </p>
         <p>
-          É proibido utilizar a ferramenta para burlar sistemas de detecção,
-          moderação ou políticas de plataformas de terceiros.
+          É proibido utilizar a ferramenta para burlar sistemas de detecção, moderação ou políticas
+          de plataformas de terceiros.
         </p>
         <p>
-          A confirmação de direitos é registrada e vincula sua conta a cada
-          envio de processamento.
+          A confirmação de direitos é registrada e vincula sua conta a cada envio de processamento.
         </p>
       </div>
     </div>

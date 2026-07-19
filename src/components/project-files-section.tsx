@@ -21,10 +21,7 @@ import {
 } from "@/lib/project-files.functions";
 import type { getAppSettings } from "@/lib/app-settings.functions";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  extensionMatchesMime,
-  sanitizeFileName,
-} from "@/lib/project-schemas";
+import { extensionMatchesMime, sanitizeFileName } from "@/lib/project-schemas";
 
 type Settings = Awaited<ReturnType<typeof getAppSettings>>;
 
@@ -48,8 +45,7 @@ function fileKind(mime: string): UploadItem["file_type"] {
 function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024)
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
@@ -84,18 +80,12 @@ export function ProjectFilesSection({
 
   const currentCount =
     (filesQuery.data?.length ?? 0) +
-    pending.filter((p) => p.status !== "error" && p.status !== "canceled")
-      .length;
+    pending.filter((p) => p.status !== "error" && p.status !== "canceled").length;
 
-  const allowedAll = [
-    ...settings.allowed_video_types,
-    ...settings.allowed_image_types,
-  ];
+  const allowedAll = [...settings.allowed_video_types, ...settings.allowed_image_types];
 
   function updateItem(key: string, patch: Partial<UploadItem>) {
-    setPending((prev) =>
-      prev.map((p) => (p.key === key ? { ...p, ...patch } : p)),
-    );
+    setPending((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)));
   }
 
   async function processUpload(item: UploadItem) {
@@ -147,9 +137,7 @@ export function ProjectFilesSection({
         });
       } catch (confirmErr) {
         // rollback do storage — o servidor tenta, mas garantimos aqui
-        await supabase.storage.from(prepared.bucket).remove([
-          prepared.storage_path,
-        ]);
+        await supabase.storage.from(prepared.bucket).remove([prepared.storage_path]);
         throw confirmErr;
       }
 
@@ -174,11 +162,9 @@ export function ProjectFilesSection({
   function validateLocal(file: File): string | null {
     if (file.size > settings.max_file_size_mb * 1024 * 1024)
       return `Arquivo maior que ${settings.max_file_size_mb} MB.`;
-    if (!allowedAll.includes(file.type))
-      return "Tipo de arquivo não permitido.";
+    if (!allowedAll.includes(file.type)) return "Tipo de arquivo não permitido.";
     const safe = sanitizeFileName(file.name);
-    if (!extensionMatchesMime(safe, file.type))
-      return "A extensão não corresponde ao tipo.";
+    if (!extensionMatchesMime(safe, file.type)) return "A extensão não corresponde ao tipo.";
     return null;
   }
 
@@ -186,13 +172,8 @@ export function ProjectFilesSection({
     const arr = Array.from(files);
     const items: UploadItem[] = [];
     for (const f of arr) {
-      if (
-        currentCount + items.length >=
-        settings.max_files_per_project
-      ) {
-        toast.error(
-          `Limite de ${settings.max_files_per_project} arquivos atingido.`,
-        );
+      if (currentCount + items.length >= settings.max_files_per_project) {
+        toast.error(`Limite de ${settings.max_files_per_project} arquivos atingido.`);
         break;
       }
       const err = validateLocal(f);
@@ -229,8 +210,8 @@ export function ProjectFilesSection({
         <div>
           <h2 className="text-lg font-semibold">Arquivos do projeto</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Vídeos, logotipos e áudios. Máx {settings.max_files_per_project}{" "}
-            arquivos, até {settings.max_file_size_mb} MB cada.
+            Vídeos, logotipos e áudios. Máx {settings.max_files_per_project} arquivos, até{" "}
+            {settings.max_file_size_mb} MB cada.
           </p>
         </div>
         <button
@@ -276,18 +257,12 @@ export function ProjectFilesSection({
       {pending.length > 0 && (
         <ul className="mt-4 space-y-2">
           {pending.map((item) => (
-            <li
-              key={item.key}
-              className="rounded-md border border-border bg-surface p-3"
-            >
+            <li key={item.key} className="rounded-md border border-border bg-surface p-3">
               <div className="flex items-center gap-2 text-sm">
                 <IconForType type={item.file.type} />
                 <span className="flex-1 truncate">{item.file.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {humanSize(item.file.size)}
-                </span>
-                {(item.status === "uploading" ||
-                  item.status === "confirming") && (
+                <span className="text-xs text-muted-foreground">{humanSize(item.file.size)}</span>
+                {(item.status === "uploading" || item.status === "confirming") && (
                   <button
                     onClick={() => item.abort?.abort()}
                     className="text-muted-foreground hover:text-foreground"
@@ -312,8 +287,8 @@ export function ProjectFilesSection({
                     item.status === "error"
                       ? "bg-destructive"
                       : item.status === "done"
-                      ? "bg-emerald-500"
-                      : "bg-primary"
+                        ? "bg-emerald-500"
+                        : "bg-primary"
                   }`}
                   style={{ width: `${item.progress}%` }}
                 />
@@ -324,8 +299,7 @@ export function ProjectFilesSection({
                 {item.status === "confirming" && "Confirmando…"}
                 {item.status === "done" && "Concluído"}
                 {item.status === "canceled" && "Cancelado"}
-                {item.status === "error" &&
-                  `Erro: ${item.error ?? "desconhecido"}`}
+                {item.status === "error" && `Erro: ${item.error ?? "desconhecido"}`}
               </p>
             </li>
           ))}
@@ -348,9 +322,7 @@ export function ProjectFilesSection({
               <li key={f.id} className="flex items-center gap-3 py-3 text-sm">
                 <IconForType type={f.mime_type} />
                 <span className="flex-1 truncate">{f.file_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {humanSize(f.file_size)}
-                </span>
+                <span className="text-xs text-muted-foreground">{humanSize(f.file_size)}</span>
                 <button
                   onClick={() => removeMut.mutate(f.id)}
                   disabled={removeMut.isPending}

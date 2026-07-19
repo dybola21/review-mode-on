@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ApiPublicWorkerWebhookRouteImport } from './routes/api/public/worker-webhook'
+import { Route as ApiPublicWorkerRenewUploadRouteImport } from './routes/api/public/worker-renew-upload'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 import { Route as AuthenticatedProjectsProjectIdResultsRouteImport } from './routes/_authenticated/projects.$projectId.results'
@@ -60,6 +61,12 @@ const ApiPublicWorkerWebhookRoute = ApiPublicWorkerWebhookRouteImport.update({
   path: '/api/public/worker-webhook',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicWorkerRenewUploadRoute =
+  ApiPublicWorkerRenewUploadRouteImport.update({
+    id: '/api/public/worker-renew-upload',
+    path: '/api/public/worker-renew-upload',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedProjectsNewRoute =
   AuthenticatedProjectsNewRouteImport.update({
     id: '/projects/new',
@@ -88,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-renew-upload': typeof ApiPublicWorkerRenewUploadRoute
   '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
   '/projects/$projectId/results': typeof AuthenticatedProjectsProjectIdResultsRoute
 }
@@ -100,6 +108,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-renew-upload': typeof ApiPublicWorkerRenewUploadRoute
   '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
   '/projects/$projectId/results': typeof AuthenticatedProjectsProjectIdResultsRoute
 }
@@ -114,6 +123,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRouteWithChildren
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-renew-upload': typeof ApiPublicWorkerRenewUploadRoute
   '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
   '/_authenticated/projects/$projectId/results': typeof AuthenticatedProjectsProjectIdResultsRoute
 }
@@ -128,6 +138,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/api/public/worker-renew-upload'
     | '/api/public/worker-webhook'
     | '/projects/$projectId/results'
   fileRoutesByTo: FileRoutesByTo
@@ -140,6 +151,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/api/public/worker-renew-upload'
     | '/api/public/worker-webhook'
     | '/projects/$projectId/results'
   id:
@@ -153,6 +165,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/projects/new'
+    | '/api/public/worker-renew-upload'
     | '/api/public/worker-webhook'
     | '/_authenticated/projects/$projectId/results'
   fileRoutesById: FileRoutesById
@@ -163,6 +176,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
+  ApiPublicWorkerRenewUploadRoute: typeof ApiPublicWorkerRenewUploadRoute
   ApiPublicWorkerWebhookRoute: typeof ApiPublicWorkerWebhookRoute
 }
 
@@ -222,6 +236,13 @@ declare module '@tanstack/react-router' {
       path: '/api/public/worker-webhook'
       fullPath: '/api/public/worker-webhook'
       preLoaderRoute: typeof ApiPublicWorkerWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/worker-renew-upload': {
+      id: '/api/public/worker-renew-upload'
+      path: '/api/public/worker-renew-upload'
+      fullPath: '/api/public/worker-renew-upload'
+      preLoaderRoute: typeof ApiPublicWorkerRenewUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/projects/new': {
@@ -287,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
+  ApiPublicWorkerRenewUploadRoute: ApiPublicWorkerRenewUploadRoute,
   ApiPublicWorkerWebhookRoute: ApiPublicWorkerWebhookRoute,
 }
 export const routeTree = rootRouteImport

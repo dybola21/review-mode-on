@@ -59,9 +59,7 @@ function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Minha conta</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Atualize suas informações de perfil.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">Atualize suas informações de perfil.</p>
 
       <form onSubmit={save} className="surface-card mt-8 space-y-4 p-6">
         <div>
@@ -74,10 +72,7 @@ function SettingsPage() {
           />
         </div>
         <div>
-          <label
-            htmlFor="displayName"
-            className="mb-1.5 block text-sm font-medium"
-          >
+          <label htmlFor="displayName" className="mb-1.5 block text-sm font-medium">
             Nome de exibição
           </label>
           <input

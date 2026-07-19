@@ -21,11 +21,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
 const numberSchema = z.number().finite().positive();
 const stringArraySchema = z.array(z.string().min(1).max(120)).min(1).max(50);
 
-function parseValue<T>(
-  raw: unknown,
-  fallback: T,
-  parser: (v: unknown) => T,
-): T {
+function parseValue<T>(raw: unknown, fallback: T, parser: (v: unknown) => T): T {
   try {
     return parser(raw);
   } catch {
@@ -36,9 +32,7 @@ function parseValue<T>(
 export const getAppSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AppSettings> => {
-    const { data, error } = await context.supabase
-      .from("app_settings")
-      .select("key, value");
+    const { data, error } = await context.supabase.from("app_settings").select("key, value");
 
     if (error) {
       console.error("[getAppSettings]", error);

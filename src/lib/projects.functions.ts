@@ -15,7 +15,6 @@ const updateProjectSchema = z.object({
   status: z.enum(CLIENT_STATUSES).optional(),
 });
 
-
 const idSchema = z.object({ id: z.string().uuid() });
 
 function toClientError(message: string): Error {
@@ -27,9 +26,7 @@ export const listProjects = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("projects")
-      .select(
-        "id, name, status, variation_count, created_at, updated_at",
-      )
+      .select("id, name, status, variation_count, created_at, updated_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -92,15 +89,11 @@ export const updateProject = createServerFn({ method: "POST" })
     if (rest.name !== undefined) patch.name = rest.name;
     if (rest.status !== undefined) patch.status = rest.status;
 
-
     if (Object.keys(patch).length === 0) {
       throw toClientError("Nada para atualizar.");
     }
 
-    const { error } = await context.supabase
-      .from("projects")
-      .update(patch)
-      .eq("id", id);
+    const { error } = await context.supabase.from("projects").update(patch).eq("id", id);
 
     if (error) {
       console.error("[updateProject]", error);
@@ -128,10 +121,7 @@ export const deleteProject = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => idSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("projects")
-      .delete()
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("projects").delete().eq("id", data.id);
     if (error) {
       console.error("[deleteProject]", error);
       throw toClientError("Não foi possível excluir o projeto.");

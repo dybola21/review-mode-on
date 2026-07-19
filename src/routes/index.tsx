@@ -22,9 +22,7 @@ function HomePage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <Link to="/" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-md gradient-primary" />
-            <span className="text-lg font-semibold tracking-tight">
-              Editor em Massa
-            </span>
+            <span className="text-lg font-semibold tracking-tight">Editor em Massa</span>
           </Link>
           <nav className="flex items-center gap-3">
             <Link
@@ -59,8 +57,8 @@ function HomePage() {
             , em lote.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
-            Crie versões editoriais consistentes dos seus próprios vídeos
-            utilizando templates, identidade visual e processamento em lote.
+            Crie versões editoriais consistentes dos seus próprios vídeos utilizando templates,
+            identidade visual e processamento em lote.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
@@ -105,12 +103,10 @@ function HomePage() {
           <div className="surface-card p-8">
             <h3 className="text-lg font-semibold">Uso responsável</h3>
             <p className="mt-3 text-sm text-muted-foreground">
-              O Editor em Massa é destinado a criadores que já possuem os
-              direitos ou a autorização necessária sobre os arquivos enviados.
-              Não utilize a ferramenta para burlar moderação, políticas de
-              plataformas ou direitos autorais de terceiros. Ao enviar um
-              projeto para processamento, você confirma expressamente que
-              detém tais direitos.
+              O Editor em Massa é destinado a criadores que já possuem os direitos ou a autorização
+              necessária sobre os arquivos enviados. Não utilize a ferramenta para burlar moderação,
+              políticas de plataformas ou direitos autorais de terceiros. Ao enviar um projeto para
+              processamento, você confirma expressamente que detém tais direitos.
             </p>
           </div>
         </section>
@@ -133,15 +129,7 @@ function HomePage() {
   );
 }
 
-function Feature({
-  icon,
-  title,
-  text,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  text: string;
-}) {
+function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
     <div className="surface-card p-6">
       <div className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-primary">

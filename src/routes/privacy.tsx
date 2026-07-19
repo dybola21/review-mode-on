@@ -19,17 +19,14 @@ function PrivacyPage() {
       <h1 className="text-3xl font-semibold">Política de Privacidade</h1>
       <div className="mt-6 space-y-4 text-sm text-muted-foreground">
         <p>
-          Armazenamos apenas os dados necessários para operar a aplicação:
-          email, nome de exibição e conteúdo dos projetos que você cria.
+          Armazenamos apenas os dados necessários para operar a aplicação: email, nome de exibição e
+          conteúdo dos projetos que você cria.
         </p>
         <p>
-          Vídeos e arquivos enviados são armazenados de forma privada e
-          acessíveis somente pelo próprio usuário autenticado.
+          Vídeos e arquivos enviados são armazenados de forma privada e acessíveis somente pelo
+          próprio usuário autenticado.
         </p>
-        <p>
-          Você pode excluir seus projetos e arquivos a qualquer momento pelo
-          painel.
-        </p>
+        <p>Você pode excluir seus projetos e arquivos a qualquer momento pelo painel.</p>
       </div>
     </div>
   );

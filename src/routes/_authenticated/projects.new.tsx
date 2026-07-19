@@ -41,8 +41,7 @@ function NewProjectPage() {
 
       <h1 className="text-2xl font-semibold tracking-tight">Novo projeto</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        Dê um nome ao projeto. Você poderá enviar vídeos e configurar o
-        template no próximo passo.
+        Dê um nome ao projeto. Você poderá enviar vídeos e configurar o template no próximo passo.
       </p>
 
       <form
@@ -53,10 +52,7 @@ function NewProjectPage() {
         className="surface-card mt-8 space-y-4 p-6"
       >
         <div>
-          <label
-            htmlFor="name"
-            className="mb-1.5 block text-sm font-medium text-foreground"
-          >
+          <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-foreground">
             Nome do projeto
           </label>
           <input

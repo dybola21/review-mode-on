@@ -30,10 +30,7 @@ export function VariationsEditor({
   currentCount: number;
   maxVariations: number;
 }) {
-  const schema = useMemo(
-    () => makeVariationSettingsSchema(maxVariations),
-    [maxVariations],
-  );
+  const schema = useMemo(() => makeVariationSettingsSchema(maxVariations), [maxVariations]);
 
   const parsed = schema.safeParse(initial);
   const [v, setV] = useState<VariationSettings>(
@@ -64,8 +61,8 @@ export function VariationsEditor({
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Variações editoriais</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Cada variação gera uma versão editorial do vídeo com pequenos
-          ajustes de identidade visual. Máx {maxVariations} por projeto.
+          Cada variação gera uma versão editorial do vídeo com pequenos ajustes de identidade
+          visual. Máx {maxVariations} por projeto.
         </p>
       </div>
 
@@ -82,10 +79,7 @@ export function VariationsEditor({
             onChange={(e) =>
               setV((prev) => ({
                 ...prev,
-                variation_count: Math.max(
-                  1,
-                  Math.min(maxVariations, Number(e.target.value) || 1),
-                ),
+                variation_count: Math.max(1, Math.min(maxVariations, Number(e.target.value) || 1)),
               }))
             }
             className="input w-32"
@@ -96,10 +90,7 @@ export function VariationsEditor({
           {(Object.keys(RANGES) as RangeKey[]).map((key) => {
             const r = RANGES[key];
             return (
-              <div
-                key={key}
-                className="rounded-md border border-border bg-surface p-3"
-              >
+              <div key={key} className="rounded-md border border-border bg-surface p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-xs font-medium">{r.label}</span>
                   <span className="text-[10px] text-muted-foreground">
@@ -113,9 +104,7 @@ export function VariationsEditor({
                     min={r.min}
                     max={r.max}
                     value={v[key].min}
-                    onChange={(e) =>
-                      setRange(key, "min", Number(e.target.value))
-                    }
+                    onChange={(e) => setRange(key, "min", Number(e.target.value))}
                     className="input"
                   />
                   <input
@@ -124,9 +113,7 @@ export function VariationsEditor({
                     min={r.min}
                     max={r.max}
                     value={v[key].max}
-                    onChange={(e) =>
-                      setRange(key, "max", Number(e.target.value))
-                    }
+                    onChange={(e) => setRange(key, "max", Number(e.target.value))}
                     className="input"
                   />
                 </div>
@@ -139,9 +126,7 @@ export function VariationsEditor({
           <input
             type="checkbox"
             checked={v.watermark_position_jitter}
-            onChange={(e) =>
-              setV((p) => ({ ...p, watermark_position_jitter: e.target.checked }))
-            }
+            onChange={(e) => setV((p) => ({ ...p, watermark_position_jitter: e.target.checked }))}
           />
           Permitir leve variação da posição da marca d’água
         </label>

@@ -28,9 +28,7 @@ function DashboardPage() {
     <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Meus projetos
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Meus projetos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Organize seus vídeos, templates e variações.
           </p>
@@ -55,9 +53,7 @@ function DashboardPage() {
         </div>
       )}
 
-      {!isLoading && !error && active.length === 0 && archived.length === 0 && (
-        <EmptyState />
-      )}
+      {!isLoading && !error && active.length === 0 && archived.length === 0 && <EmptyState />}
 
       {active.length > 0 && (
         <section className="mt-8">
@@ -94,12 +90,9 @@ function EmptyState() {
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-accent">
         <Video className="h-6 w-6 text-primary" />
       </div>
-      <h3 className="mt-4 text-lg font-semibold">
-        Você ainda não tem projetos
-      </h3>
+      <h3 className="mt-4 text-lg font-semibold">Você ainda não tem projetos</h3>
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-        Crie seu primeiro projeto para organizar vídeos, templates e variações
-        editoriais em lote.
+        Crie seu primeiro projeto para organizar vídeos, templates e variações editoriais em lote.
       </p>
       <Link
         to="/projects/new"
@@ -111,19 +104,12 @@ function EmptyState() {
   );
 }
 
-function ProjectCard({
-  project,
-  archived,
-}: {
-  project: ProjectRow;
-  archived?: boolean;
-}) {
+function ProjectCard({ project, archived }: { project: ProjectRow; archived?: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const updateFn = useServerFn(updateProject);
   const mut = useMutation({
-    mutationFn: (status: "ready" | "archived") =>
-      updateFn({ data: { id: project.id, status } }),
+    mutationFn: (status: "ready" | "archived") => updateFn({ data: { id: project.id, status } }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       toast.success(archived ? "Projeto restaurado." : "Projeto arquivado.");
@@ -147,12 +133,10 @@ function ProjectCard({
             <Video className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold group-hover:text-primary">
-              {project.name}
-            </h3>
+            <h3 className="truncate font-semibold group-hover:text-primary">{project.name}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {new Date(project.created_at).toLocaleDateString("pt-BR")} ·{" "}
-              {project.variation_count} variações
+              {new Date(project.created_at).toLocaleDateString("pt-BR")} · {project.variation_count}{" "}
+              variações
             </p>
           </div>
         </div>

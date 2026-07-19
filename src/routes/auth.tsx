@@ -113,13 +113,9 @@ function AuthPage() {
             <span className="text-lg font-semibold">Editor em Massa</span>
           </div>
 
-          <h1 className="text-2xl font-semibold">
-            {mode === "signup" ? "Criar conta" : "Entrar"}
-          </h1>
+          <h1 className="text-2xl font-semibold">{mode === "signup" ? "Criar conta" : "Entrar"}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "signup"
-              ? "Comece a criar suas variações editoriais."
-              : "Acesse seu painel."}
+            {mode === "signup" ? "Comece a criar suas variações editoriais." : "Acesse seu painel."}
           </p>
 
           <button
@@ -128,11 +124,7 @@ function AuthPage() {
             disabled={googleLoading || loading}
             className="mt-6 flex w-full items-center justify-center gap-2 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium transition-colors hover:bg-accent disabled:opacity-60"
           >
-            {googleLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <GoogleLogo />
-            )}
+            {googleLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <GoogleLogo />}
             Continuar com Google
           </button>
 
@@ -178,9 +170,7 @@ function AuthPage() {
                 maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                autoComplete={
-                  mode === "signup" ? "new-password" : "current-password"
-                }
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 placeholder="Mínimo de 8 caracteres"
               />
@@ -250,10 +240,7 @@ function Field({
 }) {
   return (
     <div>
-      <label
-        htmlFor={htmlFor}
-        className="mb-1.5 block text-sm font-medium text-foreground"
-      >
+      <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-foreground">
         {label}
       </label>
       {children}
@@ -273,13 +260,9 @@ function GoogleLogo() {
 }
 
 function translateAuthError(msg: string): string {
-  if (/Invalid login credentials/i.test(msg))
-    return "Email ou senha inválidos.";
-  if (/User already registered/i.test(msg))
-    return "Este email já está cadastrado.";
-  if (/Password should be at least/i.test(msg))
-    return "A senha deve ter pelo menos 8 caracteres.";
-  if (/pwned/i.test(msg))
-    return "Esta senha aparece em vazamentos públicos. Escolha outra.";
+  if (/Invalid login credentials/i.test(msg)) return "Email ou senha inválidos.";
+  if (/User already registered/i.test(msg)) return "Este email já está cadastrado.";
+  if (/Password should be at least/i.test(msg)) return "A senha deve ter pelo menos 8 caracteres.";
+  if (/pwned/i.test(msg)) return "Esta senha aparece em vazamentos públicos. Escolha outra.";
   return msg;
 }

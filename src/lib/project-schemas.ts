@@ -31,8 +31,7 @@ export const templateSettingsSchema = z.object({
 
 export type TemplateSettings = z.infer<typeof templateSettingsSchema>;
 
-export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings =
-  templateSettingsSchema.parse({});
+export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = templateSettingsSchema.parse({});
 
 /**
  * Cria o schema de variações usando o limite dinâmico de app_settings.
@@ -63,9 +62,7 @@ export function makeVariationSettingsSchema(maxVariations: number) {
   });
 }
 
-export type VariationSettings = z.infer<
-  ReturnType<typeof makeVariationSettingsSchema>
->;
+export type VariationSettings = z.infer<ReturnType<typeof makeVariationSettingsSchema>>;
 
 export const DEFAULT_VARIATION_SETTINGS: VariationSettings = {
   brightness: { min: -0.05, max: 0.05 },

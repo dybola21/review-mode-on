@@ -10,14 +10,7 @@ import {
   type TemplateSettings,
 } from "@/lib/project-schemas";
 
-
-export function TemplateEditor({
-  projectId,
-  initial,
-}: {
-  projectId: string;
-  initial: unknown;
-}) {
+export function TemplateEditor({ projectId, initial }: { projectId: string; initial: unknown }) {
   const parsed = templateSettingsSchema.safeParse(initial);
   const [tpl, setTpl] = useState<TemplateSettings>(
     parsed.success ? parsed.data : DEFAULT_TEMPLATE_SETTINGS,
@@ -25,16 +18,12 @@ export function TemplateEditor({
 
   const saveFn = useServerFn(updateTemplateSettings);
   const save = useMutation({
-    mutationFn: () =>
-      saveFn({ data: { project_id: projectId, template: tpl } }),
+    mutationFn: () => saveFn({ data: { project_id: projectId, template: tpl } }),
     onSuccess: () => toast.success("Template salvo."),
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
 
-  function set<K extends keyof TemplateSettings>(
-    key: K,
-    value: TemplateSettings[K],
-  ) {
+  function set<K extends keyof TemplateSettings>(key: K, value: TemplateSettings[K]) {
     setTpl((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -113,30 +102,22 @@ export function TemplateEditor({
                 <option value="bottom-right">Inf. direita</option>
               </select>
             </Field>
-            <Field
-              label={`Opacidade da marca (${Math.round(tpl.watermark_opacity * 100)}%)`}
-            >
+            <Field label={`Opacidade da marca (${Math.round(tpl.watermark_opacity * 100)}%)`}>
               <input
                 type="range"
                 min={0}
                 max={100}
                 value={Math.round(tpl.watermark_opacity * 100)}
-                onChange={(e) =>
-                  set("watermark_opacity", Number(e.target.value) / 100)
-                }
+                onChange={(e) => set("watermark_opacity", Number(e.target.value) / 100)}
               />
             </Field>
-            <Field
-              label={`Área superior (${Math.round(tpl.header_height_ratio * 100)}%)`}
-            >
+            <Field label={`Área superior (${Math.round(tpl.header_height_ratio * 100)}%)`}>
               <input
                 type="range"
                 min={5}
                 max={40}
                 value={Math.round(tpl.header_height_ratio * 100)}
-                onChange={(e) =>
-                  set("header_height_ratio", Number(e.target.value) / 100)
-                }
+                onChange={(e) => set("header_height_ratio", Number(e.target.value) / 100)}
               />
             </Field>
           </div>
@@ -158,18 +139,10 @@ export function TemplateEditor({
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">
-        {label}
-      </span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
   );
