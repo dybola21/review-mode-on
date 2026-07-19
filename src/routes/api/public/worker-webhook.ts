@@ -273,7 +273,13 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         }
 
         // Demais transições
-        const patch: Record<string, unknown> = { status: evt.status };
+        const patch: {
+          status: typeof evt.status;
+          progress?: number;
+          completed_at?: string;
+          error_code?: string;
+          error_message?: string;
+        } = { status: evt.status };
         if (progress !== undefined) patch.progress = progress;
         if (evt.status === "failed" || evt.status === "cancelled") {
           patch.completed_at = new Date().toISOString();

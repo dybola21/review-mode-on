@@ -16,6 +16,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicWorkerWebhookRouteImport } from './routes/api/public/worker-webhook'
 import { Route as AuthenticatedProjectsNewRouteImport } from './routes/_authenticated/projects.new'
 import { Route as AuthenticatedProjectsProjectIdRouteImport } from './routes/_authenticated/projects.$projectId'
 
@@ -53,6 +54,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicWorkerWebhookRoute = ApiPublicWorkerWebhookRouteImport.update({
+  id: '/api/public/worker-webhook',
+  path: '/api/public/worker-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedProjectsNewRoute =
   AuthenticatedProjectsNewRouteImport.update({
     id: '/projects/new',
@@ -75,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/projects/$projectId': typeof AuthenticatedProjectsProjectIdRoute
   '/_authenticated/projects/new': typeof AuthenticatedProjectsNewRoute
+  '/api/public/worker-webhook': typeof ApiPublicWorkerWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/api/public/worker-webhook'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/projects/$projectId'
     | '/projects/new'
+    | '/api/public/worker-webhook'
   id:
     | '__root__'
     | '/'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/projects/$projectId'
     | '/_authenticated/projects/new'
+    | '/api/public/worker-webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -138,6 +150,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
+  ApiPublicWorkerWebhookRoute: typeof ApiPublicWorkerWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -191,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/worker-webhook': {
+      id: '/api/public/worker-webhook'
+      path: '/api/public/worker-webhook'
+      fullPath: '/api/public/worker-webhook'
+      preLoaderRoute: typeof ApiPublicWorkerWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/projects/new': {
       id: '/_authenticated/projects/new'
       path: '/projects/new'
@@ -231,6 +251,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
+  ApiPublicWorkerWebhookRoute: ApiPublicWorkerWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
