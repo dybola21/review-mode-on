@@ -32,11 +32,7 @@ export function TemplatePreview9x16({ template, logoUrl }: Props) {
           style={{ height: `${template.header_height_ratio * 100}%` }}
         >
           {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Logo"
-              className="max-h-10 object-contain"
-            />
+            <img src={logoUrl} alt="Logo" className="max-h-10 object-contain" />
           ) : (
             <div
               className="text-[10px] font-semibold uppercase tracking-widest"
@@ -46,9 +42,7 @@ export function TemplatePreview9x16({ template, logoUrl }: Props) {
             </div>
           )}
           {template.page_name && (
-            <div className="truncate text-xs font-semibold">
-              {template.page_name}
-            </div>
+            <div className="truncate text-xs font-semibold">{template.page_name}</div>
           )}
           {template.identifier && (
             <div
@@ -68,9 +62,7 @@ export function TemplatePreview9x16({ template, logoUrl }: Props) {
           }}
         >
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[10px] uppercase tracking-widest text-white/40">
-              Vídeo 9:16
-            </span>
+            <span className="text-[10px] uppercase tracking-widest text-white/40">Vídeo 9:16</span>
           </div>
 
           {/* Frase principal */}
@@ -91,11 +83,7 @@ export function TemplatePreview9x16({ template, logoUrl }: Props) {
             style={{ opacity: template.watermark_opacity }}
           >
             {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt=""
-                className="max-h-6 object-contain"
-              />
+              <img src={logoUrl} alt="" className="max-h-6 object-contain" />
             ) : (
               <div
                 className="rounded px-1.5 py-0.5 text-[8px] font-bold uppercase"

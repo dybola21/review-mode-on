@@ -1,10 +1,4 @@
-import {
-  createFileRoute,
-  Outlet,
-  redirect,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -46,9 +40,7 @@ function AuthenticatedLayout() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link to="/dashboard" className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-md gradient-primary" />
-            <span className="text-base font-semibold tracking-tight">
-              Editor em Massa
-            </span>
+            <span className="text-base font-semibold tracking-tight">Editor em Massa</span>
           </Link>
           <nav className="flex items-center gap-2">
             <Link

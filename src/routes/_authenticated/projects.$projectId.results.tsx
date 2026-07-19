@@ -3,14 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  getSignedDownloadUrl,
-  listRenderOutputs,
-} from "@/lib/render.functions";
+import { getSignedDownloadUrl, listRenderOutputs } from "@/lib/render.functions";
 
-export const Route = createFileRoute(
-  "/_authenticated/projects/$projectId/results",
-)({
+export const Route = createFileRoute("/_authenticated/projects/$projectId/results")({
   head: () => ({
     meta: [{ title: "Resultados — Editor em Massa" }],
   }),
@@ -75,9 +70,7 @@ function ResultsPage() {
         <ArrowLeft className="h-4 w-4" /> Voltar ao projeto
       </Link>
       <h1 className="text-2xl font-semibold tracking-tight">Resultados</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Arquivos gerados pelo processamento.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">Arquivos gerados pelo processamento.</p>
 
       <div className="surface-card mt-6 p-6">
         {query.isLoading ? (
@@ -91,18 +84,13 @@ function ResultsPage() {
         ) : (
           <ul className="divide-y divide-border">
             {query.data.map((o) => {
-              const expired =
-                o.expires_at && new Date(o.expires_at) < new Date();
+              const expired = o.expires_at && new Date(o.expires_at) < new Date();
               return (
-                <li
-                  key={o.id}
-                  className="flex flex-wrap items-center justify-between gap-3 py-3"
-                >
+                <li key={o.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                   <div>
                     <p className="text-sm font-medium">{o.file_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatSize(o.file_size)} ·{" "}
-                      {new Date(o.created_at).toLocaleString("pt-BR")}
+                      {formatSize(o.file_size)} · {new Date(o.created_at).toLocaleString("pt-BR")}
                       {o.expires_at && (
                         <>
                           {" · "}

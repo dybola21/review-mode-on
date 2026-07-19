@@ -1,26 +1,16 @@
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  deleteProject,
-  getProject,
-  updateProject,
-} from "@/lib/projects.functions";
+import { deleteProject, getProject, updateProject } from "@/lib/projects.functions";
 import { getAppSettings } from "@/lib/app-settings.functions";
 import { ProjectFilesSection } from "@/components/project-files-section";
 import { TemplateEditor } from "@/components/template-editor";
 import { VariationsEditor } from "@/components/variations-editor";
 import { RightsSection } from "@/components/rights-section";
 import { RenderSection } from "@/components/render-section";
-
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   head: () => ({
@@ -109,7 +99,6 @@ function EditProjectPage() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
 
-
   const deleteMut = useMutation({
     mutationFn: () => deleteFn({ data: { id: projectId } }),
     onSuccess: () => {
@@ -142,12 +131,9 @@ function EditProjectPage() {
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {project.name}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Criado em{" "}
-            {new Date(project.created_at).toLocaleDateString("pt-BR")}
+            Criado em {new Date(project.created_at).toLocaleDateString("pt-BR")}
           </p>
         </div>
       </div>
@@ -158,10 +144,7 @@ function EditProjectPage() {
         </h2>
 
         <div>
-          <label
-            htmlFor="name"
-            className="mb-1.5 block text-sm font-medium text-foreground"
-          >
+          <label htmlFor="name" className="mb-1.5 block text-sm font-medium text-foreground">
             Nome
           </label>
           <input
@@ -192,14 +175,8 @@ function EditProjectPage() {
 
       {settingsQuery.data && (
         <div className="mt-6 space-y-6">
-          <ProjectFilesSection
-            projectId={projectId}
-            settings={settingsQuery.data}
-          />
-          <TemplateEditor
-            projectId={projectId}
-            initial={project.template_settings}
-          />
+          <ProjectFilesSection projectId={projectId} settings={settingsQuery.data} />
+          <TemplateEditor projectId={projectId} initial={project.template_settings} />
           <VariationsEditor
             projectId={projectId}
             initial={project.variation_settings}
@@ -216,8 +193,7 @@ function EditProjectPage() {
           Zona de perigo
         </h2>
         <p className="text-sm text-muted-foreground">
-          Excluir remove o projeto permanentemente, junto com todos os
-          arquivos enviados.
+          Excluir remove o projeto permanentemente, junto com todos os arquivos enviados.
         </p>
         {!confirmDelete ? (
           <button
@@ -228,9 +204,7 @@ function EditProjectPage() {
           </button>
         ) : (
           <div className="flex flex-wrap items-center gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3">
-            <span className="text-sm text-foreground">
-              Tem certeza? Esta ação é irreversível.
-            </span>
+            <span className="text-sm text-foreground">Tem certeza? Esta ação é irreversível.</span>
             <div className="flex gap-2">
               <button
                 onClick={() => setConfirmDelete(false)}
@@ -243,9 +217,7 @@ function EditProjectPage() {
                 disabled={deleteMut.isPending}
                 className="inline-flex items-center gap-1.5 rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-50"
               >
-                {deleteMut.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                )}
+                {deleteMut.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 Confirmar exclusão
               </button>
             </div>
@@ -255,4 +227,3 @@ function EditProjectPage() {
     </div>
   );
 }
-

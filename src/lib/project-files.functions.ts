@@ -3,14 +3,10 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import {
-  DEFAULT_APP_SETTINGS,
-  type AppSettings,
-} from "./app-settings.functions";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "./app-settings.functions";
 import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
 
 type SB = SupabaseClient<Database>;
-
 
 function clientError(msg: string): Error {
   return new Error(msg);
@@ -19,12 +15,7 @@ function clientError(msg: string): Error {
 const idSchema = z.object({ id: z.string().uuid() });
 const projectIdSchema = z.object({ project_id: z.string().uuid() });
 
-const fileTypeEnum = z.enum([
-  "source_video",
-  "logo",
-  "music",
-  "template_asset",
-]);
+const fileTypeEnum = z.enum(["source_video", "logo", "music", "template_asset"]);
 
 const prepareUploadSchema = z.object({
   project_id: z.string().uuid(),
@@ -36,7 +27,12 @@ const prepareUploadSchema = z.object({
 
 const confirmUploadSchema = z.object({
   id: z.string().uuid(),
-  duration_seconds: z.number().finite().min(0).max(60 * 60 * 6).optional(),
+  duration_seconds: z
+    .number()
+    .finite()
+    .min(0)
+    .max(60 * 60 * 6)
+    .optional(),
 });
 
 const BUCKETS = {
@@ -56,35 +52,18 @@ async function loadSettings(supabase: SB): Promise<AppSettings> {
   };
   const arr = (k: keyof AppSettings, d: string[]) => {
     const v = map.get(k);
-    return Array.isArray(v) && v.every((x) => typeof x === "string")
-      ? (v as string[])
-      : d;
+    return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : d;
   };
   return {
-    max_files_per_project: num(
-      "max_files_per_project",
-      DEFAULT_APP_SETTINGS.max_files_per_project,
-    ),
-    max_file_size_mb: num(
-      "max_file_size_mb",
-      DEFAULT_APP_SETTINGS.max_file_size_mb,
-    ),
+    max_files_per_project: num("max_files_per_project", DEFAULT_APP_SETTINGS.max_files_per_project),
+    max_file_size_mb: num("max_file_size_mb", DEFAULT_APP_SETTINGS.max_file_size_mb),
     max_variations: num("max_variations", DEFAULT_APP_SETTINGS.max_variations),
-    allowed_video_types: arr(
-      "allowed_video_types",
-      DEFAULT_APP_SETTINGS.allowed_video_types,
-    ),
-    allowed_image_types: arr(
-      "allowed_image_types",
-      DEFAULT_APP_SETTINGS.allowed_image_types,
-    ),
+    allowed_video_types: arr("allowed_video_types", DEFAULT_APP_SETTINGS.allowed_video_types),
+    allowed_image_types: arr("allowed_image_types", DEFAULT_APP_SETTINGS.allowed_image_types),
   };
 }
 
-async function assertProjectOwner(
-  supabase: SB,
-  projectId: string,
-): Promise<void> {
+async function assertProjectOwner(supabase: SB, projectId: string): Promise<void> {
   const { data, error } = await supabase
     .from("projects")
     .select("id")
@@ -92,7 +71,6 @@ async function assertProjectOwner(
     .maybeSingle();
   if (error || !data) throw clientError("Projeto não encontrado.");
 }
-
 
 // ----- listar arquivos -----
 export const listProjectFiles = createServerFn({ method: "GET" })
@@ -125,17 +103,15 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const maxBytes = settings.max_file_size_mb * 1024 * 1024;
 
     if (data.file_size > maxBytes) {
-      throw clientError(
-        `Arquivo maior que o limite de ${settings.max_file_size_mb} MB.`,
-      );
+      throw clientError(`Arquivo maior que o limite de ${settings.max_file_size_mb} MB.`);
     }
 
     const allowedByType =
       data.file_type === "source_video"
         ? settings.allowed_video_types
         : data.file_type === "logo" || data.file_type === "template_asset"
-        ? settings.allowed_image_types
-        : ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"];
+          ? settings.allowed_image_types
+          : ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"];
 
     if (!allowedByType.includes(data.mime_type)) {
       throw clientError("Tipo de arquivo não permitido.");
@@ -162,9 +138,7 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       throw clientError("Erro ao validar limite de arquivos.");
     }
     if ((count ?? 0) >= settings.max_files_per_project) {
-      throw clientError(
-        `Limite de ${settings.max_files_per_project} arquivos atingido.`,
-      );
+      throw clientError(`Limite de ${settings.max_files_per_project} arquivos atingido.`);
     }
 
     const bucket = BUCKETS[data.file_type];
@@ -251,9 +225,7 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     if (error || !inserted) {
       console.error("[confirmProjectFile] insert", error);
       // Rollback: tenta apagar o arquivo órfão
-      await context.supabase.storage
-        .from(data.bucket)
-        .remove([data.storage_path]);
+      await context.supabase.storage.from(data.bucket).remove([data.storage_path]);
       throw clientError("Não foi possível registrar o arquivo.");
     }
 
@@ -266,13 +238,9 @@ export const updateProjectFileMeta = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => confirmUploadSchema.parse(data))
   .handler(async ({ data, context }) => {
     const patch: { duration_seconds?: number } = {};
-    if (data.duration_seconds !== undefined)
-      patch.duration_seconds = data.duration_seconds;
+    if (data.duration_seconds !== undefined) patch.duration_seconds = data.duration_seconds;
     if (Object.keys(patch).length === 0) return { ok: true };
-    const { error } = await context.supabase
-      .from("project_files")
-      .update(patch)
-      .eq("id", data.id);
+    const { error } = await context.supabase.from("project_files").update(patch).eq("id", data.id);
     if (error) console.error("[updateProjectFileMeta]", error);
     return { ok: true };
   });

@@ -1,20 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
-import {
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  PlayCircle,
-  RefreshCw,
-  Server,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, PlayCircle, RefreshCw, Server } from "lucide-react";
 import { toast } from "sonner";
-import {
-  checkWorkerHealth,
-  getLatestRenderJob,
-  submitRenderJob,
-} from "@/lib/render.functions";
+import { checkWorkerHealth, getLatestRenderJob, submitRenderJob } from "@/lib/render.functions";
 
 const ACTIVE = new Set(["queued", "submitting", "processing"]);
 const FINAL = new Set(["completed", "failed", "cancelled", "expired"]);
@@ -60,23 +49,19 @@ export function RenderSection({ projectId }: { projectId: string }) {
       qc.invalidateQueries({ queryKey: ["render-job", projectId] });
       qc.invalidateQueries({ queryKey: ["project", projectId] });
     },
-    onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Não foi possível iniciar."),
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Não foi possível iniciar."),
   });
 
   const canSubmit =
-    health.data?.configured &&
-    health.data?.available &&
-    !isActive &&
-    !submit.isPending;
+    health.data?.configured && health.data?.available && !isActive && !submit.isPending;
 
   const workerStatus = !health.data
     ? { icon: Loader2, label: "Verificando servidor…", cls: "text-muted-foreground animate-spin" }
     : !health.data.configured
-    ? { icon: Server, label: "Servidor não configurado", cls: "text-muted-foreground" }
-    : health.data.available
-    ? { icon: CheckCircle2, label: "Servidor disponível", cls: "text-emerald-500" }
-    : { icon: AlertCircle, label: "Servidor indisponível", cls: "text-amber-500" };
+      ? { icon: Server, label: "Servidor não configurado", cls: "text-muted-foreground" }
+      : health.data.available
+        ? { icon: CheckCircle2, label: "Servidor disponível", cls: "text-emerald-500" }
+        : { icon: AlertCircle, label: "Servidor indisponível", cls: "text-amber-500" };
 
   const WorkerIcon = workerStatus.icon;
 
@@ -100,9 +85,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
       {job.data && (
         <div className="rounded-md border border-border bg-surface p-4">
           <div className="flex items-center justify-between text-sm">
-            <span className="font-medium">
-              {STATUS_LABEL[job.data.status] ?? job.data.status}
-            </span>
+            <span className="font-medium">{STATUS_LABEL[job.data.status] ?? job.data.status}</span>
             <span className="text-muted-foreground">
               {new Date(job.data.updated_at).toLocaleString("pt-BR")}
             </span>
@@ -116,9 +99,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
             </div>
           )}
           {job.data.status === "failed" && job.data.error_message && (
-            <p className="mt-2 text-sm text-destructive">
-              {job.data.error_message}
-            </p>
+            <p className="mt-2 text-sm text-destructive">{job.data.error_message}</p>
           )}
           {job.data.status === "completed" && (
             <Link

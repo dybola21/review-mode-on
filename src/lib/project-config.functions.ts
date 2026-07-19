@@ -58,9 +58,7 @@ export const updateVariationSettings = createServerFn({ method: "POST" })
     const schema = makeVariationSettingsSchema(maxVariations);
     const parsed = schema.safeParse(data.settings);
     if (!parsed.success) {
-      throw clientError(
-        parsed.error.issues[0]?.message ?? "Configuração inválida.",
-      );
+      throw clientError(parsed.error.issues[0]?.message ?? "Configuração inválida.");
     }
 
     const { error } = await context.supabase

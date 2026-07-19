@@ -2,10 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import {
-  confirmProjectRights,
-  getProjectRightsStatus,
-} from "@/lib/project-config.functions";
+import { confirmProjectRights, getProjectRightsStatus } from "@/lib/project-config.functions";
 import { RIGHTS_CONFIRMATION_TEXT } from "@/lib/project-schemas";
 
 export function RightsSection({ projectId }: { projectId: string }) {
@@ -58,9 +55,8 @@ export function RightsSection({ projectId }: { projectId: string }) {
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-500">
                 <AlertTriangle className="mt-0.5 h-4 w-4" />
                 <div>
-                  Os arquivos foram alterados após a última confirmação. Uma
-                  nova confirmação é necessária antes de qualquer
-                  processamento futuro.
+                  Os arquivos foram alterados após a última confirmação. Uma nova confirmação é
+                  necessária antes de qualquer processamento futuro.
                 </div>
               </div>
             )}
@@ -69,9 +65,7 @@ export function RightsSection({ projectId }: { projectId: string }) {
               disabled={confirm.isPending}
               className="rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
-              {confirm.isPending
-                ? "Registrando…"
-                : "Confirmo que tenho os direitos"}
+              {confirm.isPending ? "Registrando…" : "Confirmo que tenho os direitos"}
             </button>
           </div>
         )}
