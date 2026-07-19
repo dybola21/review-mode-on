@@ -76,7 +76,7 @@ async function dispatchOne(
   cfg: Config,
   w: { id: string; payload_json: string; attempts: number },
 ): Promise<void> {
-  const timestamp = new Date().toISOString();
+  const timestamp = String(Math.floor(Date.now() / 1000));
   const message = buildSignatureMessage(timestamp, w.payload_json);
   const signature = computeHmacHex(cfg.APP_WEBHOOK_SECRET, message);
   const controller = new AbortController();
