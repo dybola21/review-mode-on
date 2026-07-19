@@ -180,10 +180,15 @@ export function ProjectFilesSection({
         toast.error(`${f.name}: ${err}`);
         continue;
       }
+      const kind = fileKind(f.type);
+      if (!kind) {
+        toast.error(`${f.name}: tipo não suportado nesta versão.`);
+        continue;
+      }
       items.push({
         key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file: f,
-        file_type: fileKind(f.type),
+        file_type: kind,
         status: "queued",
         progress: 0,
       });
