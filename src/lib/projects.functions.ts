@@ -13,10 +13,8 @@ const updateProjectSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(120).optional(),
   status: z.enum(CLIENT_STATUSES).optional(),
-  template_settings: z.record(z.string(), z.unknown()).optional(),
-  variation_settings: z.record(z.string(), z.unknown()).optional(),
-  variation_count: z.number().int().min(1).max(100).optional(),
 });
+
 
 const idSchema = z.object({ id: z.string().uuid() });
 
