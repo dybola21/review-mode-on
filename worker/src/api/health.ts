@@ -3,7 +3,12 @@ import { ffmpegAvailable } from "../queue/scheduler.js";
 import type { QueueDB } from "../queue/db.js";
 import type { Config } from "../config.js";
 
-export function registerHealth(app: FastifyInstance, db: QueueDB, cfg: Config, isReady: () => boolean): void {
+export function registerHealth(
+  app: FastifyInstance,
+  db: QueueDB,
+  cfg: Config,
+  isReady: () => boolean,
+): void {
   app.get("/health", async (_req, reply) => {
     const avail = await ffmpegAvailable();
     const queueOk = db.isHealthy();

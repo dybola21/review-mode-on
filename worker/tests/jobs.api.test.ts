@@ -84,7 +84,11 @@ describe("POST /jobs", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jobs",
-      headers: { authorization: "Bearer wrong", "idempotency-key": "idem-key-abc", "content-type": "application/json" },
+      headers: {
+        authorization: "Bearer wrong",
+        "idempotency-key": "idem-key-abc",
+        "content-type": "application/json",
+      },
       payload,
     });
     expect(res.statusCode).toBe(401);

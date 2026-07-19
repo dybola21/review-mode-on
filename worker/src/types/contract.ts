@@ -33,7 +33,11 @@ export const jobPayloadSchema = z
     templateSettings: z.record(z.unknown()).default({}),
     variationSettings: z.record(z.unknown()).default({}),
     variationCount: z.number().int().min(1).max(50),
-    uploadTtlSeconds: z.number().int().min(60).max(24 * 3600),
+    uploadTtlSeconds: z
+      .number()
+      .int()
+      .min(60)
+      .max(24 * 3600),
   })
   .strict();
 

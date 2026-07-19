@@ -84,9 +84,7 @@ describe("loadConfig", () => {
   });
   it("rejects legacy APP_WEBHOOK_URL to avoid conflicting configuration", () => {
     expect(() =>
-      loadConfig(
-        baseEnv({ APP_WEBHOOK_URL: "https://app.example.com/api/public/worker-webhook" }),
-      ),
+      loadConfig(baseEnv({ APP_WEBHOOK_URL: "https://app.example.com/api/public/worker-webhook" })),
     ).toThrow(/APP_WEBHOOK_URL/);
   });
 });

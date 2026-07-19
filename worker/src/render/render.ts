@@ -8,7 +8,12 @@ import {
   templateSettingsSchema,
   variationSettingsSchema,
 } from "../types/contract.js";
-import { downloadInput, ffprobe, assertMimeMatchesProbe, DownloadError } from "../storage/download.js";
+import {
+  downloadInput,
+  ffprobe,
+  assertMimeMatchesProbe,
+  DownloadError,
+} from "../storage/download.js";
 import { uploadOutput, UploadError } from "../storage/upload.js";
 import { ensureInsideDir, jobDirName, safeBaseName } from "../storage/paths.js";
 import { buildTemplateOverlay, assertTemplateSafe } from "./template.js";
@@ -140,7 +145,10 @@ export async function runJob(
           cancel,
           onProgress: (p) => {
             const localFraction = (stepsDone + p / 100) / totalSteps;
-            db.updateProgress(row.worker_job_id, Math.min(99, Math.max(1, Math.round(localFraction * 100))));
+            db.updateProgress(
+              row.worker_job_id,
+              Math.min(99, Math.max(1, Math.round(localFraction * 100))),
+            );
           },
         },
         srcProbe,
@@ -150,7 +158,12 @@ export async function runJob(
 
       // Upload with renewal on 401/403.
       await uploadWithRenew(outLocal, target, payload, cfg);
-      db.recordUploadedOutput(row.worker_job_id, target.workerOutputId, (await fs.stat(outLocal)).size, null);
+      db.recordUploadedOutput(
+        row.worker_job_id,
+        target.workerOutputId,
+        (await fs.stat(outLocal)).size,
+        null,
+      );
       // Remove local output right away.
       await fs.rm(outLocal, { force: true });
       stepsDone += 1;
@@ -256,11 +269,7 @@ async function downloadWithRenew(
         current = { ...current, signedUrl: renewed };
         continue;
       }
-      if (
-        err instanceof DownloadError &&
-        err.code === "input_download_transient" &&
-        attempt <= 3
-      ) {
+      if (err instanceof DownloadError && err.code === "input_download_transient" && attempt <= 3) {
         await sleep(500 * attempt);
         continue;
       }
@@ -288,11 +297,7 @@ async function uploadWithRenew(
       });
       return;
     } catch (err) {
-      if (
-        err instanceof UploadError &&
-        err.code === "output_upload_expired" &&
-        attempt <= 2
-      ) {
+      if (err instanceof UploadError && err.code === "output_upload_expired" && attempt <= 2) {
         currentUrl = await renewUploadUrl(payload, target.workerOutputId, cfg);
         continue;
       }

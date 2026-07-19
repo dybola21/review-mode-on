@@ -80,23 +80,23 @@ uploads confirmados.
 
 Todas validadas com Zod no boot. Falta ou valor fraco derruba o processo.
 
-| Variável                    | Obrigatório | Descrição                                                       |
-| --------------------------- | :---------: | --------------------------------------------------------------- |
-| `PORT`                      |     não     | Porta HTTP (default 3000).                                      |
-| `WORKER_API_KEY`            |   **sim**   | Bearer usado pelo Lovable (mín. 32 chars).                      |
-| `APP_WEBHOOK_URL`           |   **sim**   | URL do endpoint `/api/public/worker-webhook`.                   |
-| `APP_WEBHOOK_SECRET`        |   **sim**   | HMAC dos webhooks (mín. 32 chars).                              |
-| `WORKER_PUBLIC_URL`         |     não     | URL pública do worker (uso informativo).                        |
-| `DATA_DIR`                  |     não     | Volume persistente (default `/data`).                           |
-| `TEMP_DIR`                  |     não     | Diretório efêmero (default `/tmp/editor-worker`).               |
-| `MAX_CONCURRENCY`           |     não     | Jobs simultâneos (default 1).                                   |
-| `MAX_INPUT_BYTES`           |     não     | Bytes máx. por download.                                        |
-| `MAX_OUTPUT_BYTES`          |     não     | Bytes máx. por resultado.                                       |
-| `MAX_JOB_DURATION_SECONDS`  |     não     | Wall clock máx. por job.                                        |
-| `FFMPEG_TIMEOUT_SECONDS`    |     não     | Timeout por invocação de ffmpeg.                                |
-| `ALLOWED_DOWNLOAD_HOSTS`    |   **sim**   | Hostnames permitidos nos inputs (CSV).                          |
-| `ALLOWED_UPLOAD_HOSTS`      |   **sim**   | Hostnames permitidos nos uploads (CSV).                         |
-| `LOG_LEVEL`                 |     não     | pino level (default `info`).                                    |
+| Variável                   | Obrigatório | Descrição                                         |
+| -------------------------- | :---------: | ------------------------------------------------- |
+| `PORT`                     |     não     | Porta HTTP (default 3000).                        |
+| `WORKER_API_KEY`           |   **sim**   | Bearer usado pelo Lovable (mín. 32 chars).        |
+| `APP_WEBHOOK_URL`          |   **sim**   | URL do endpoint `/api/public/worker-webhook`.     |
+| `APP_WEBHOOK_SECRET`       |   **sim**   | HMAC dos webhooks (mín. 32 chars).                |
+| `WORKER_PUBLIC_URL`        |     não     | URL pública do worker (uso informativo).          |
+| `DATA_DIR`                 |     não     | Volume persistente (default `/data`).             |
+| `TEMP_DIR`                 |     não     | Diretório efêmero (default `/tmp/editor-worker`). |
+| `MAX_CONCURRENCY`          |     não     | Jobs simultâneos (default 1).                     |
+| `MAX_INPUT_BYTES`          |     não     | Bytes máx. por download.                          |
+| `MAX_OUTPUT_BYTES`         |     não     | Bytes máx. por resultado.                         |
+| `MAX_JOB_DURATION_SECONDS` |     não     | Wall clock máx. por job.                          |
+| `FFMPEG_TIMEOUT_SECONDS`   |     não     | Timeout por invocação de ffmpeg.                  |
+| `ALLOWED_DOWNLOAD_HOSTS`   |   **sim**   | Hostnames permitidos nos inputs (CSV).            |
+| `ALLOWED_UPLOAD_HOSTS`     |   **sim**   | Hostnames permitidos nos uploads (CSV).           |
+| `LOG_LEVEL`                |     não     | pino level (default `info`).                      |
 
 Segredos, signed URLs e `Authorization` são redigidos dos logs.
 

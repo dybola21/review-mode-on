@@ -11,7 +11,9 @@ describe("url allowlist", () => {
   });
 
   it("accepts a subdomain of an allowed host", () => {
-    expect(() => assertAllowedUrl("https://a.storage.supabase.co/", hosts, "upload", true)).not.toThrow();
+    expect(() =>
+      assertAllowedUrl("https://a.storage.supabase.co/", hosts, "upload", true),
+    ).not.toThrow();
   });
 
   it("rejects unknown host", () => {
@@ -27,7 +29,9 @@ describe("url allowlist", () => {
   });
 
   it("allows localhost http in dev", () => {
-    expect(() => assertAllowedUrl("http://localhost/x", ["localhost"], "download", false)).not.toThrow();
+    expect(() =>
+      assertAllowedUrl("http://localhost/x", ["localhost"], "download", false),
+    ).not.toThrow();
   });
 
   it("rejects malformed url", () => {

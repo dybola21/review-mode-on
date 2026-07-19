@@ -42,7 +42,11 @@ async function post<T>(
   }
 }
 
-export async function renewInputUrl(payload: JobPayload, fileId: string, cfg: Config): Promise<string> {
+export async function renewInputUrl(
+  payload: JobPayload,
+  fileId: string,
+  cfg: Config,
+): Promise<string> {
   const raw = await post<unknown>(
     cfg.APP_RENEW_INPUT_URL,
     {
