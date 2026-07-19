@@ -97,7 +97,8 @@ const VARIATION: VariationSettings = {
 describe("template + ffmpeg composition (skipped when ffmpeg missing)", async () => {
   const ff = await hasBin("ffmpeg");
   const fp = await hasBin("ffprobe");
-  const runIt = ff && fp ? it : it.skip;
+  const svg = ff ? await ffmpegHasSvg() : false;
+  const runIt = ff && fp && svg ? it : it.skip;
 
   runIt(
     "renders a 1080x1920 h264 with header, logo, headline and watermark",
