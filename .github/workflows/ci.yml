@@ -60,7 +60,6 @@ jobs:
       - name: Verify dist/server.js exists
         run: test -f dist/server.js
 
-
   docker:
     name: Docker build & healthcheck
     runs-on: ubuntu-latest
