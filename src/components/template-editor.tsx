@@ -108,7 +108,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
               className="input min-h-[64px]"
               value={tpl.headline}
               onChange={(e) => set("headline", e.target.value)}
-              maxLength={200}
+              maxLength={160}
             />
           </Field>
 
