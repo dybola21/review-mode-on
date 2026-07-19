@@ -72,21 +72,24 @@ function EditProjectPage() {
   const getFn = useServerFn(getProject);
   const updateFn = useServerFn(updateProject);
   const deleteFn = useServerFn(deleteProject);
+  const settingsFn = useServerFn(getAppSettings);
 
   const query = useQuery({
     queryKey: ["project", projectId],
     queryFn: () => getFn({ data: { id: projectId } }),
   });
 
+  const settingsQuery = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: () => settingsFn(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const [name, setName] = useState("");
-  const [variationCount, setVariationCount] = useState(1);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
-    if (query.data) {
-      setName(query.data.name);
-      setVariationCount(query.data.variation_count ?? 1);
-    }
+    if (query.data) setName(query.data.name);
   }, [query.data]);
 
   const saveMut = useMutation({
@@ -95,7 +98,6 @@ function EditProjectPage() {
         data: {
           id: projectId,
           name: name.trim(),
-          variation_count: variationCount,
         },
       }),
     onSuccess: () => {
@@ -105,6 +107,7 @@ function EditProjectPage() {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Erro"),
   });
+
 
   const deleteMut = useMutation({
     mutationFn: () => deleteFn({ data: { id: projectId } }),
