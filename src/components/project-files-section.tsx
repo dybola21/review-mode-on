@@ -121,24 +121,12 @@ export function ProjectFilesSection({
 
       updateItem(item.key, { status: "confirming", progress: 92 });
 
-      try {
-        await confirmFn({
-          data: {
-            project_id: projectId,
-            file_id: prepared.file_id,
-            file_name: prepared.safe_file_name,
-            storage_path: prepared.storage_path,
-            bucket: prepared.bucket,
-            file_type: item.file_type,
-            mime_type: item.file.type,
-            file_size: item.file.size,
-          },
-        });
-      } catch (confirmErr) {
-        // rollback do storage — o servidor tenta, mas garantimos aqui
-        await supabase.storage.from(prepared.bucket).remove([prepared.storage_path]);
-        throw confirmErr;
-      }
+      await confirmFn({
+        data: {
+          project_id: projectId,
+          file_id: prepared.file_id,
+        },
+      });
 
       updateItem(item.key, { status: "done", progress: 100 });
       qc.invalidateQueries({ queryKey: ["project-files", projectId] });
