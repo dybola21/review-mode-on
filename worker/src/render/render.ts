@@ -250,6 +250,7 @@ async function downloadWithRenew(
   input: InputFile,
   destDir: string,
   payload: JobPayload,
+  workerJobId: string,
   cfg: Config,
 ): Promise<{ localPath: string; bytes: number }> {
   let attempt = 0;
@@ -265,7 +266,7 @@ async function downloadWithRenew(
       });
     } catch (err) {
       if (err instanceof DownloadError && err.code === "input_expired" && attempt <= 2) {
-        const renewed = await renewInputUrl(payload, input.fileId, cfg);
+        const renewed = await renewInputUrl(payload, workerJobId, input.fileId, cfg);
         current = { ...current, signedUrl: renewed };
         continue;
       }
@@ -282,6 +283,7 @@ async function uploadWithRenew(
   localPath: string,
   target: JobPayload["outputTargets"][number],
   payload: JobPayload,
+  workerJobId: string,
   cfg: Config,
 ): Promise<void> {
   let attempt = 0;
@@ -298,7 +300,7 @@ async function uploadWithRenew(
       return;
     } catch (err) {
       if (err instanceof UploadError && err.code === "output_upload_expired" && attempt <= 2) {
-        currentUrl = await renewUploadUrl(payload, target.workerOutputId, cfg);
+        currentUrl = await renewUploadUrl(payload, workerJobId, target.workerOutputId, cfg);
         continue;
       }
       if (err instanceof UploadError && err.transient && attempt <= 3) {
@@ -308,7 +310,6 @@ async function uploadWithRenew(
       throw err;
     }
   }
-}
 
 function classifyError(err: unknown): { code: string; message: string } {
   if (err instanceof DownloadError) return { code: err.code, message: err.message };
