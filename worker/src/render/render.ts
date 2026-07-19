@@ -98,28 +98,38 @@ export async function runJob(
       throw new RenderError("invalid_job", "Nenhum vídeo de origem.");
     }
 
-    const logo = template.logo_file_id ? localById.get(template.logo_file_id) : undefined;
-    const music = template.music_file_id ? localById.get(template.music_file_id) : undefined;
+    // Logo must exist in inputs AND be an image when referenced by the template.
+    let logoPath: string | null = null;
+    if (template.logo_file_id) {
+      const logoEntry = localById.get(template.logo_file_id);
+      if (!logoEntry) {
+        throw new RenderError("template_logo_invalid", "Logo do template não foi enviado.");
+      }
+      if (!logoEntry.input.mimeType.startsWith("image/")) {
+        throw new RenderError("template_logo_invalid", "Logo do template não é uma imagem.");
+      }
+      logoPath = logoEntry.path;
+    }
 
-    // 2) Build template overlay once per job (2D-only overlay).
-    void logo;
+    // 2) Build template overlay once per job (header + optional watermark PNG).
     const overlay = await buildTemplateOverlay({
       width: OUT_W,
       height: OUT_H,
       template,
       outDir: assetsDir,
-      workerOutputId: row.worker_job_id,
+      jobId: row.worker_job_id,
+      logoPath,
       ffmpegTimeoutMs: 60_000,
     });
+
+    // Watermark jitter budget: up to 4% of frame width.
+    const jitterBudget = Math.round(OUT_W * 0.04);
 
     // 3) Render outputs, one at a time.
     for (const target of payload.outputTargets) {
       cancel.throwIfAborted();
       heartbeat.check();
 
-      // Attribute each target to a source deterministically: caller sends
-      // sourceCount × variationCount targets in order; we reconstruct by
-      // dividing target index. The relative position is what matters.
       const idx = payload.outputTargets.indexOf(target);
       const perSource = payload.variationCount;
       const sourceIdx = Math.floor(idx / perSource) % source.length;
@@ -134,17 +144,28 @@ export async function runJob(
         variationIdx,
         variation,
       );
+      const jitter = computeWatermarkOffset(
+        payload.jobId,
+        target.workerOutputId,
+        variationIdx,
+        variation.watermark_position_jitter,
+        jitterBudget,
+      );
       const srcProbe = await ffprobe(src.path);
       await renderOutput(
         {
           sourceVideoPath: src.path,
-          overlayPngPath: overlay.overlayPngPath,
-          musicPath: music?.path ?? null,
+          headerOverlayPath: overlay.headerOverlayPath,
+          watermarkPngPath: overlay.watermarkPngPath,
+          watermarkSize: overlay.watermarkSize,
+          watermarkPosition: template.watermark_position,
+          watermarkOpacity: template.watermark_opacity,
+          watermarkJitter: jitter,
           outputPath: outLocal,
           variation: params,
           targetWidth: OUT_W,
           targetHeight: OUT_H,
-          fit: template.fit === "crop" ? "crop" : "contain",
+          headerHeight: overlay.layout.headerHeight,
           crf: DEFAULT_CRF,
           timeoutMs: cfg.FFMPEG_TIMEOUT_SECONDS * 1000,
           maxDurationSeconds: cfg.MAX_JOB_DURATION_SECONDS,
