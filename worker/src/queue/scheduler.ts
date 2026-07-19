@@ -65,7 +65,11 @@ export class Scheduler {
 // -------------------------------------------------------------------------
 // Small helper: probe ffmpeg + ffprobe presence at startup / health.
 // -------------------------------------------------------------------------
-export async function ffmpegAvailable(): Promise<{ ffmpeg: boolean; ffprobe: boolean; version: string | null }> {
+export async function ffmpegAvailable(): Promise<{
+  ffmpeg: boolean;
+  ffprobe: boolean;
+  version: string | null;
+}> {
   const [ff, fp] = await Promise.all([bin("ffmpeg"), bin("ffprobe")]);
   return { ffmpeg: ff.ok, ffprobe: fp.ok, version: ff.version };
 }

@@ -165,20 +165,9 @@ export interface ProbeInfo {
   audioCodec?: string;
 }
 
-export async function ffprobe(
-  file: string,
-  ffprobeTimeoutMs = 15_000,
-): Promise<ProbeInfo> {
+export async function ffprobe(file: string, ffprobeTimeoutMs = 15_000): Promise<ProbeInfo> {
   return new Promise((resolve, reject) => {
-    const args = [
-      "-v",
-      "error",
-      "-print_format",
-      "json",
-      "-show_format",
-      "-show_streams",
-      file,
-    ];
+    const args = ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", file];
     const child = spawn("ffprobe", args, { shell: false });
     let out = "";
     let err = "";

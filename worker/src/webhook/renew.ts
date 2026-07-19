@@ -4,14 +4,8 @@ import { computeHmacHex, buildSignatureMessage, newNonce } from "../security/hma
 import { renewInputResponseSchema, renewUploadResponseSchema } from "../types/contract.js";
 
 /**
- * Renew endpoints live on the same Lovable app under /api/public/. We
- * derive their URLs by swapping the trailing path of APP_WEBHOOK_URL.
+ * Renew endpoints are pre-derived from APP_BASE_URL at config load time.
  */
-function renewUrl(cfg: Config, name: "worker-renew-input" | "worker-renew-upload"): string {
-  const u = new URL(cfg.APP_WEBHOOK_URL);
-  u.pathname = u.pathname.replace(/worker-webhook$/, name);
-  return u.toString();
-}
 
 interface RenewCommon {
   jobId: string;
@@ -48,9 +42,13 @@ async function post<T>(
   }
 }
 
-export async function renewInputUrl(payload: JobPayload, fileId: string, cfg: Config): Promise<string> {
+export async function renewInputUrl(
+  payload: JobPayload,
+  fileId: string,
+  cfg: Config,
+): Promise<string> {
   const raw = await post<unknown>(
-    renewUrl(cfg, "worker-renew-input"),
+    cfg.APP_RENEW_INPUT_URL,
     {
       jobId: payload.jobId,
       workerJobId: payload.jobId, // not the worker-side id — app matches by jobId
@@ -69,7 +67,7 @@ export async function renewUploadUrl(
   cfg: Config,
 ): Promise<string> {
   const raw = await post<unknown>(
-    renewUrl(cfg, "worker-renew-upload"),
+    cfg.APP_RENEW_UPLOAD_URL,
     {
       jobId: payload.jobId,
       workerJobId: payload.jobId,

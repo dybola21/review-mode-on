@@ -14,7 +14,10 @@ const cfg = {
   LOG_LEVEL: "silent",
   WORKER_API_KEY: KEY,
   WORKER_PUBLIC_URL: undefined,
+  APP_BASE_URL: "https://app.example.com",
   APP_WEBHOOK_URL: "https://app.example.com/api/public/worker-webhook",
+  APP_RENEW_INPUT_URL: "https://app.example.com/api/public/worker-renew-input",
+  APP_RENEW_UPLOAD_URL: "https://app.example.com/api/public/worker-renew-upload",
   APP_WEBHOOK_SECRET: "y".repeat(32),
   DATA_DIR: "/tmp",
   TEMP_DIR: "/tmp/editor-worker",
@@ -81,7 +84,11 @@ describe("POST /jobs", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jobs",
-      headers: { authorization: "Bearer wrong", "idempotency-key": "idem-key-abc", "content-type": "application/json" },
+      headers: {
+        authorization: "Bearer wrong",
+        "idempotency-key": "idem-key-abc",
+        "content-type": "application/json",
+      },
       payload,
     });
     expect(res.statusCode).toBe(401);

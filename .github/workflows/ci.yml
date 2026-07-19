@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies (frozen lockfile)
+        run: bun install --frozen-lockfile
+      - name: Prettier check
+        run: bunx prettier --check .
+      - name: Lint
+        run: bun run lint
+      - name: Typecheck
+        run: bunx tsgo --noEmit
+      - name: Build
+        run: bun run build
+
+  worker:
+    name: Worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: worker/package-lock.json
+      - name: Install FFmpeg for integration tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Install dependencies (npm ci)
+        run: npm ci
+      - name: Prettier check
+        run: npx prettier --check "src/**/*.ts" "tests/**/*.ts" "*.json" "*.md"
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests (incl. FFmpeg integration)
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker build & healthcheck
+    runs-on: ubuntu-latest
+    needs: worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docker build
+        run: docker build -t editor-em-massa-worker:ci -f worker/Dockerfile worker
+
+      - name: Verify container runs as non-root
+        run: |
+          USER_ID=$(docker run --rm --entrypoint id editor-em-massa-worker:ci -u)
+          echo "container uid=$USER_ID"
+          if [ "$USER_ID" = "0" ]; then
+            echo "container must not run as root"
+            exit 1
+          fi
+
+      - name: Verify /data is writable by non-root user
+        run: |
+          docker run --rm --entrypoint sh editor-em-massa-worker:ci -c \
+            'touch /data/.probe && rm /data/.probe && echo "ok"'
+
+      - name: Assert no plaintext secrets baked into the image
+        run: |
+          # Fail if any obvious secret material shipped in the image.
+          if docker run --rm --entrypoint sh editor-em-massa-worker:ci -c \
+              'grep -R -I -E "(BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)|(sk_live_)|(sb_secret_)" /app 2>/dev/null'; then
+            echo "possible secret material detected in image"
+            exit 1
+          fi
+          # No .env-style secret files.
+          if docker run --rm --entrypoint sh editor-em-massa-worker:ci -c \
+              'ls /app/.env /app/.env.local /app/.env.production 2>/dev/null'; then
+            echo ".env file present in image"
+            exit 1
+          fi
+
+      - name: Start container with dummy CI secrets
+        env:
+          CI_WORKER_API_KEY: ${{ github.run_id }}-worker-api-key-padding-to-32chars
+          CI_WEBHOOK_SECRET: ${{ github.run_id }}-webhook-secret-padding-to-32chars
+        run: |
+          # Values scoped to this job, never printed. Not real credentials.
+          docker run -d --name worker-ci -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e WORKER_API_KEY="$CI_WORKER_API_KEY" \
+            -e APP_WEBHOOK_SECRET="$CI_WEBHOOK_SECRET" \
+            -e APP_BASE_URL="https://ci.example.com" \
+            -e ALLOWED_DOWNLOAD_HOSTS="ci.example.com" \
+            -e ALLOWED_UPLOAD_HOSTS="ci.example.com" \
+            editor-em-massa-worker:ci >/dev/null
+
+      - name: Poll /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/health >/tmp/health.json 2>/dev/null; then
+              echo "healthy after ${i}s"
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "health endpoint never became ready"
+          docker logs worker-ci || true
+          exit 1
+
+      - name: Stop and remove container
+        if: always()
+        run: |
+          docker rm -f worker-ci >/dev/null 2>&1 || true

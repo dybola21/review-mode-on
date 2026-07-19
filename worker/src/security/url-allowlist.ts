@@ -20,8 +20,7 @@ export function assertAllowedUrl(
     throw new UrlAllowlistError(`invalid_${kind}_url`, "URL malformada.");
   }
   if (u.protocol !== "https:") {
-    const localhostOk =
-      !isProduction && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
+    const localhostOk = !isProduction && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
     if (!localhostOk) {
       throw new UrlAllowlistError(`insecure_${kind}_url`, "URL não HTTPS não permitida.");
     }

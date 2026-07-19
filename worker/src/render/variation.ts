@@ -45,10 +45,22 @@ export function computeVariationParams(
   ranges: Ranges,
 ): VariationParams {
   const merged: Required<Ranges> = {
-    brightness_range: clampRange(ranges.brightness_range ?? DEFAULTS.brightness_range, HARD_BOUNDS.brightness),
-    contrast_range: clampRange(ranges.contrast_range ?? DEFAULTS.contrast_range, HARD_BOUNDS.contrast),
-    saturation_range: clampRange(ranges.saturation_range ?? DEFAULTS.saturation_range, HARD_BOUNDS.saturation),
-    temperature_range: clampRange(ranges.temperature_range ?? DEFAULTS.temperature_range, HARD_BOUNDS.temperature),
+    brightness_range: clampRange(
+      ranges.brightness_range ?? DEFAULTS.brightness_range,
+      HARD_BOUNDS.brightness,
+    ),
+    contrast_range: clampRange(
+      ranges.contrast_range ?? DEFAULTS.contrast_range,
+      HARD_BOUNDS.contrast,
+    ),
+    saturation_range: clampRange(
+      ranges.saturation_range ?? DEFAULTS.saturation_range,
+      HARD_BOUNDS.saturation,
+    ),
+    temperature_range: clampRange(
+      ranges.temperature_range ?? DEFAULTS.temperature_range,
+      HARD_BOUNDS.temperature,
+    ),
     scale_range: clampRange(ranges.scale_range ?? DEFAULTS.scale_range, HARD_BOUNDS.scale),
   };
   const seed = deriveSeed(`${jobId}|${workerOutputId}|${variationIndex}`);

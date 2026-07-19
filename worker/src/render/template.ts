@@ -102,12 +102,9 @@ function buildSvg(o: {
   const footerH = footer ? Math.round(height * 0.08) : 0;
   const wmSize = Math.round(height * 0.028);
   const pad = Math.round(height * 0.02);
-  const wmX =
-    wmPos === "top-left" || wmPos === "bottom-left" ? pad : width - pad;
-  const wmY =
-    wmPos === "top-left" || wmPos === "top-right" ? pad + wmSize : height - pad;
-  const wmAnchor =
-    wmPos === "top-right" || wmPos === "bottom-right" ? "end" : "start";
+  const wmX = wmPos === "top-left" || wmPos === "bottom-left" ? pad : width - pad;
+  const wmY = wmPos === "top-left" || wmPos === "top-right" ? pad + wmSize : height - pad;
+  const wmAnchor = wmPos === "top-right" || wmPos === "bottom-right" ? "end" : "start";
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">

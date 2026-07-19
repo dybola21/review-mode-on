@@ -9,12 +9,7 @@ import type { JobPayload } from "../types/contract.js";
 // The full payload is stored so we can retry after a restart.
 // -----------------------------------------------------------------------
 
-export type QueueStatus =
-  | "queued"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "recovery_pending";
+export type QueueStatus = "queued" | "processing" | "completed" | "failed" | "recovery_pending";
 
 export interface QueueRow {
   worker_job_id: string;
@@ -217,9 +212,7 @@ export class QueueDB {
   recoverInProgress(): number {
     const now = new Date().toISOString();
     const res = this.db
-      .prepare(
-        `UPDATE jobs SET status = 'queued', updated_at = ? WHERE status = 'processing'`,
-      )
+      .prepare(`UPDATE jobs SET status = 'queued', updated_at = ? WHERE status = 'processing'`)
       .run(now);
     return res.changes;
   }
