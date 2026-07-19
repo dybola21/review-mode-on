@@ -1,14 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 import {
   DEFAULT_APP_SETTINGS,
   type AppSettings,
 } from "./app-settings.functions";
-import {
-  extensionMatchesMime,
-  sanitizeFileName,
-} from "./project-schemas";
+import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
+
+type SB = SupabaseClient<Database>;
+
 
 function clientError(msg: string): Error {
   return new Error(msg);
