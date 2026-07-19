@@ -295,7 +295,6 @@ function rasterizeSvg(svgPath: string, pngPath: string, timeoutMs: number): Prom
   });
 }
 
-
 /**
  * Rejects template settings that would smuggle unsafe values. Colors are
  * already validated by Zod at ingress; this is a belt-and-braces check.

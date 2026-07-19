@@ -181,126 +181,122 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     await requireBin("rsvg-convert", "--version");
   });
 
-  it(
-    "renders 1080x1920 h264 with header, accent, logo, headline and watermark in the configured quadrant",
-    async () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-"));
-      const src = path.join(dir, "src.mp4");
-      const logo = path.join(dir, "logo.png");
-      await makeSyntheticSource(src);
-      await makeSyntheticLogoPng(logo);
+  it("renders 1080x1920 h264 with header, accent, logo, headline and watermark in the configured quadrant", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-"));
+    const src = path.join(dir, "src.mp4");
+    const logo = path.join(dir, "logo.png");
+    await makeSyntheticSource(src);
+    await makeSyntheticLogoPng(logo);
 
-      const W = 1080;
-      const H = 1920;
+    const W = 1080;
+    const H = 1920;
 
-      const assets = await buildTemplateOverlay({
-        width: W,
-        height: H,
-        template: TEMPLATE,
-        outDir: dir,
-        jobId: "job-1",
-        logoPath: logo,
-        ffmpegTimeoutMs: 30_000,
-      });
-      expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
-      expect(assets.watermarkPngPath).toBeTruthy();
+    const assets = await buildTemplateOverlay({
+      width: W,
+      height: H,
+      template: TEMPLATE,
+      outDir: dir,
+      jobId: "job-1",
+      logoPath: logo,
+      ffmpegTimeoutMs: 30_000,
+    });
+    expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
+    expect(assets.watermarkPngPath).toBeTruthy();
 
-      const jobId = "11111111-1111-1111-1111-111111111111";
-      const outId = "22222222-2222-2222-2222-222222222222";
-      const params = computeVariationParams(jobId, outId, 1, VARIATION);
-      const jitter = computeWatermarkOffset(jobId, outId, 1, true, 40);
-      const out = path.join(dir, "out.mp4");
-      const srcProbe = await ffprobe(src);
-      await renderOutput(
-        {
-          sourceVideoPath: src,
-          headerOverlayPath: assets.headerOverlayPath,
-          watermarkPngPath: assets.watermarkPngPath,
-          watermarkSize: assets.watermarkSize,
-          watermarkPosition: TEMPLATE.watermark_position,
-          watermarkOpacity: TEMPLATE.watermark_opacity,
-          watermarkJitter: jitter,
-          outputPath: out,
-          variation: params,
-          targetWidth: W,
-          targetHeight: H,
-          headerHeight: assets.layout.headerHeight,
-          crf: 26,
-          timeoutMs: 60_000,
-          maxDurationSeconds: 30,
-        },
-        srcProbe,
-      );
+    const jobId = "11111111-1111-1111-1111-111111111111";
+    const outId = "22222222-2222-2222-2222-222222222222";
+    const params = computeVariationParams(jobId, outId, 1, VARIATION);
+    const jitter = computeWatermarkOffset(jobId, outId, 1, true, 40);
+    const out = path.join(dir, "out.mp4");
+    const srcProbe = await ffprobe(src);
+    await renderOutput(
+      {
+        sourceVideoPath: src,
+        headerOverlayPath: assets.headerOverlayPath,
+        watermarkPngPath: assets.watermarkPngPath,
+        watermarkSize: assets.watermarkSize,
+        watermarkPosition: TEMPLATE.watermark_position,
+        watermarkOpacity: TEMPLATE.watermark_opacity,
+        watermarkJitter: jitter,
+        outputPath: out,
+        variation: params,
+        targetWidth: W,
+        targetHeight: H,
+        headerHeight: assets.layout.headerHeight,
+        crf: 26,
+        timeoutMs: 60_000,
+        maxDurationSeconds: 30,
+      },
+      srcProbe,
+    );
 
-      const info = await ffprobe(out);
-      expect(info.hasVideo).toBe(true);
-      expect(info.videoCodec).toBe("h264");
-      expect(info.width).toBe(W);
-      expect(info.height).toBe(H);
+    const info = await ffprobe(out);
+    expect(info.hasVideo).toBe(true);
+    expect(info.videoCodec).toBe("h264");
+    expect(info.width).toBe(W);
+    expect(info.height).toBe(H);
 
-      // Pixel-level checks on an extracted rgb24 frame.
-      const frame = await extractFrameRgb24(out, W, H);
-      const headerH = assets.layout.headerHeight;
-      expect(headerH).toBeGreaterThan(0);
-      expect(headerH).toBeLessThan(H);
+    // Pixel-level checks on an extracted rgb24 frame.
+    const frame = await extractFrameRgb24(out, W, H);
+    const headerH = assets.layout.headerHeight;
+    expect(headerH).toBeGreaterThan(0);
+    expect(headerH).toBeLessThan(H);
 
-      // 1) Header band is the configured near-black background (#0F0F12).
-      //    Sample a strip near the top-center that should NOT overlap the logo.
-      const headerBand = avgRegion(frame, W, Math.floor(W * 0.45), 10, 40, 20);
-      expect(isNear(headerBand, [0x0f, 0x0f, 0x12], 24)).toBe(true);
+    // 1) Header band is the configured near-black background (#0F0F12).
+    //    Sample a strip near the top-center that should NOT overlap the logo.
+    const headerBand = avgRegion(frame, W, Math.floor(W * 0.45), 10, 40, 20);
+    expect(isNear(headerBand, [0x0f, 0x0f, 0x12], 24)).toBe(true);
 
-      // 2) Video area starts BELOW the header — sample well below the header
-      //    line, near the center, and expect the synthetic green source.
-      const videoBand = avgRegion(
-        frame,
-        W,
-        Math.floor(W * 0.4),
-        headerH + Math.floor((H - headerH) * 0.5),
-        80,
-        40,
-      );
-      // Green channel dominates; red and blue are small.
-      expect(videoBand[1]).toBeGreaterThan(120);
-      expect(videoBand[0]).toBeLessThan(80);
-      expect(videoBand[2]).toBeLessThan(80);
+    // 2) Video area starts BELOW the header — sample well below the header
+    //    line, near the center, and expect the synthetic green source.
+    const videoBand = avgRegion(
+      frame,
+      W,
+      Math.floor(W * 0.4),
+      headerH + Math.floor((H - headerH) * 0.5),
+      80,
+      40,
+    );
+    // Green channel dominates; red and blue are small.
+    expect(videoBand[1]).toBeGreaterThan(120);
+    expect(videoBand[0]).toBeLessThan(80);
+    expect(videoBand[2]).toBeLessThan(80);
 
-      // 3) Accent color (#FF5A1F) appears somewhere inside the header band.
-      let sawAccent = false;
-      for (let y = 0; y < headerH && !sawAccent; y += 4) {
-        for (let x = 0; x < W && !sawAccent; x += 8) {
-          const p = pixel(frame, W, x, y);
-          if (isNear(p, [0xff, 0x5a, 0x1f], 40)) sawAccent = true;
-        }
+    // 3) Accent color (#FF5A1F) appears somewhere inside the header band.
+    let sawAccent = false;
+    for (let y = 0; y < headerH && !sawAccent; y += 4) {
+      for (let x = 0; x < W && !sawAccent; x += 8) {
+        const p = pixel(frame, W, x, y);
+        if (isNear(p, [0xff, 0x5a, 0x1f], 40)) sawAccent = true;
       }
-      expect(sawAccent).toBe(true);
+    }
+    expect(sawAccent).toBe(true);
 
-      // 4) Logo (red) appears inside the header band.
-      let sawLogo = false;
-      for (let y = 0; y < headerH && !sawLogo; y += 3) {
-        for (let x = 0; x < W && !sawLogo; x += 6) {
-          const p = pixel(frame, W, x, y);
-          if (p[0] > 180 && p[1] < 80 && p[2] < 80) sawLogo = true;
-        }
+    // 4) Logo (red) appears inside the header band.
+    let sawLogo = false;
+    for (let y = 0; y < headerH && !sawLogo; y += 3) {
+      for (let x = 0; x < W && !sawLogo; x += 6) {
+        const p = pixel(frame, W, x, y);
+        if (p[0] > 180 && p[1] < 80 && p[2] < 80) sawLogo = true;
       }
-      expect(sawLogo).toBe(true);
+    }
+    expect(sawLogo).toBe(true);
 
-      // 5) Watermark (red logo, faded) appears in the bottom-right quadrant
-      //    below the header. Jitter shifts a few px but stays inside the frame.
-      let sawWatermark = false;
-      for (let y = Math.floor(H * 0.75); y < H && !sawWatermark; y += 3) {
-        for (let x = Math.floor(W * 0.55); x < W && !sawWatermark; x += 4) {
-          const p = pixel(frame, W, x, y);
-          if (p[0] - p[1] > 25 && p[0] - p[2] > 25) sawWatermark = true;
-        }
+    // 5) Watermark (red logo, faded) appears in the bottom-right quadrant
+    //    below the header. Jitter shifts a few px but stays inside the frame.
+    let sawWatermark = false;
+    for (let y = Math.floor(H * 0.75); y < H && !sawWatermark; y += 3) {
+      for (let x = Math.floor(W * 0.55); x < W && !sawWatermark; x += 4) {
+        const p = pixel(frame, W, x, y);
+        if (p[0] - p[1] > 25 && p[0] - p[2] > 25) sawWatermark = true;
       }
-      expect(sawWatermark).toBe(true);
+    }
+    expect(sawWatermark).toBe(true);
 
-      // 6) Watermark stays fully inside the frame — jitter bounded.
-      expect(Math.abs(jitter.dx)).toBeLessThanOrEqual(40);
-      expect(Math.abs(jitter.dy)).toBeLessThanOrEqual(40);
-    },
-    120_000,
-  );
+    // 6) Watermark stays fully inside the frame — jitter bounded.
+    expect(Math.abs(jitter.dx)).toBeLessThanOrEqual(40);
+    expect(Math.abs(jitter.dy)).toBeLessThanOrEqual(40);
+  }, 120_000);
 
   it("fails cleanly with template_logo_invalid when logo is missing", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-nol-"));
