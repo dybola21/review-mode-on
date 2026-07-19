@@ -17,13 +17,17 @@ export class RenderError extends Error {
 
 export interface RenderArgs {
   sourceVideoPath: string;
-  overlayPngPath: string | null;
-  musicPath: string | null; // present only if user uploaded AND template selected
+  headerOverlayPath: string | null;
+  watermarkPngPath: string | null;
+  watermarkSize: { w: number; h: number } | null;
+  watermarkPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  watermarkOpacity: number; // 0..1
+  watermarkJitter: { dx: number; dy: number };
   outputPath: string;
   variation: VariationParams;
   targetWidth: number;
   targetHeight: number;
-  fit: "crop" | "contain";
+  headerHeight: number;
   crf: number;
   timeoutMs: number;
   maxDurationSeconds: number;
@@ -46,18 +50,19 @@ export function killAllRunning(signal: NodeJS.Signals = "SIGTERM"): void {
 export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promise<void> {
   fs.mkdirSync(path.dirname(a.outputPath), { recursive: true });
 
-  const w = a.targetWidth;
-  const h = a.targetHeight;
+  const W = a.targetWidth;
+  const H = a.targetHeight;
+  const headerH = Math.max(0, Math.min(H, a.headerHeight));
+  const videoH = H - headerH;
   const scaleFactor = a.variation.scale;
-  const scaledW = Math.round(w * scaleFactor);
-  const scaledH = Math.round(h * scaleFactor);
 
-  // Video filter chain. Uses `,` for graph and never interpolates
-  // user-supplied strings (numbers are formatted via toFixed).
+  // Scale + crop the source so it fully covers the video area, then zoom
+  // slightly using scaleFactor. No letterboxing — matches the preview.
+  const scaledW = Math.round(W * scaleFactor);
+  const scaledVideoH = Math.round(videoH * scaleFactor);
   const videoFit =
-    a.fit === "crop"
-      ? `scale=w=${scaledW}:h=${scaledH}:force_original_aspect_ratio=increase,crop=${w}:${h}`
-      : `scale=w=${scaledW}:h=${scaledH}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=black`;
+    `scale=w=${scaledW}:h=${scaledVideoH}:force_original_aspect_ratio=increase,` +
+    `crop=${W}:${videoH}`;
 
   const eq =
     `eq=brightness=${fmt(a.variation.brightness)}:` +
@@ -67,36 +72,60 @@ export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promi
   const tempShift = fmt(a.variation.temperatureShift);
   const colorAdjust = `colorbalance=rs=${tempShift}:bs=${fmt(-a.variation.temperatureShift)}`;
 
-  const base = `[0:v]${videoFit},${eq},${colorAdjust},format=yuv420p[vbase]`;
+  // Add header space above the video (transparent — real header text/logo
+  // comes from the overlay PNG rendered on top).
+  const padOp = headerH > 0 ? `,pad=${W}:${H}:0:${headerH}:color=black` : "";
+
+  const base = `[0:v]${videoFit},${eq},${colorAdjust}${padOp},format=yuv420p[vbase]`;
   const filters: string[] = [base];
   let lastVideoLabel = "[vbase]";
   const inputs: string[] = ["-i", a.sourceVideoPath];
+  let nextInputIdx = 1;
 
-  if (a.overlayPngPath) {
-    inputs.push("-i", a.overlayPngPath);
-    filters.push(`[vbase][1:v]overlay=0:0:format=auto[vout]`);
-    lastVideoLabel = "[vout]";
+  if (a.headerOverlayPath) {
+    inputs.push("-i", a.headerOverlayPath);
+    filters.push(`[vbase][${nextInputIdx}:v]overlay=0:0:format=auto[vhdr]`);
+    lastVideoLabel = "[vhdr]";
+    nextInputIdx++;
   }
 
-  // Audio wiring.
-  let audioArgs: string[] = [];
-  const audioMapLabel = "[aout]";
-  if (a.musicPath) {
-    inputs.push("-i", a.musicPath);
-    const musicIndex = a.overlayPngPath ? 2 : 1;
-    if (sourceProbe.hasAudio) {
-      filters.push(
-        `[0:a]volume=1.0[a0];[${musicIndex}:a]volume=0.35[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=2${audioMapLabel}`,
-      );
-    } else {
-      filters.push(`[${musicIndex}:a]volume=0.7${audioMapLabel}`);
+  if (a.watermarkPngPath && a.watermarkSize) {
+    inputs.push("-i", a.watermarkPngPath);
+    const wm = a.watermarkSize;
+    const margin = Math.round(W * 0.03);
+    let x: number;
+    let y: number;
+    switch (a.watermarkPosition) {
+      case "top-left":
+        x = margin;
+        y = headerH + margin;
+        break;
+      case "top-right":
+        x = W - wm.w - margin;
+        y = headerH + margin;
+        break;
+      case "bottom-left":
+        x = margin;
+        y = H - wm.h - margin;
+        break;
+      default:
+        x = W - wm.w - margin;
+        y = H - wm.h - margin;
+        break;
     }
-    audioArgs = ["-map", audioMapLabel, "-c:a", "aac", "-b:a", "160k", "-shortest"];
-  } else if (sourceProbe.hasAudio) {
-    audioArgs = ["-map", "0:a?", "-c:a", "aac", "-b:a", "160k"];
-  } else {
-    audioArgs = ["-an"];
+    x = clampInt(x + a.watermarkJitter.dx, 0, W - wm.w);
+    y = clampInt(y + a.watermarkJitter.dy, headerH, H - wm.h);
+    const opacity = Math.max(0, Math.min(1, a.watermarkOpacity));
+    filters.push(`[${nextInputIdx}:v]format=rgba,colorchannelmixer=aa=${fmt(opacity)}[wmop]`);
+    filters.push(`${lastVideoLabel}[wmop]overlay=${x}:${y}:format=auto[vout]`);
+    lastVideoLabel = "[vout]";
+    nextInputIdx++;
   }
+
+  // Audio: music is intentionally NOT part of this contract version.
+  const audioArgs = sourceProbe.hasAudio
+    ? ["-map", "0:a?", "-c:a", "aac", "-b:a", "160k"]
+    : ["-an"];
 
   const filterComplex = filters.join(";");
 

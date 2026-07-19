@@ -35,11 +35,10 @@ type UploadItem = {
   abort?: AbortController;
 };
 
-function fileKind(mime: string): UploadItem["file_type"] {
+function fileKind(mime: string): UploadItem["file_type"] | null {
   if (mime.startsWith("video/")) return "source_video";
   if (mime.startsWith("image/")) return "template_asset";
-  if (mime.startsWith("audio/")) return "music";
-  return "template_asset";
+  return null; // áudio/outros: bloqueado nesta versão
 }
 
 function humanSize(bytes: number): string {
@@ -181,10 +180,15 @@ export function ProjectFilesSection({
         toast.error(`${f.name}: ${err}`);
         continue;
       }
+      const kind = fileKind(f.type);
+      if (!kind) {
+        toast.error(`${f.name}: tipo não suportado nesta versão.`);
+        continue;
+      }
       items.push({
         key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         file: f,
-        file_type: fileKind(f.type),
+        file_type: kind,
         status: "queued",
         progress: 0,
       });

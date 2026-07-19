@@ -99,6 +99,11 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertProjectOwner(context.supabase, data.project_id);
 
+    // Música foi removida do contrato ativo nesta versão.
+    if (data.file_type === "music") {
+      throw clientError("Áudio não é suportado nesta versão.");
+    }
+
     const settings = await loadSettings(context.supabase);
     const maxBytes = settings.max_file_size_mb * 1024 * 1024;
 
@@ -109,9 +114,7 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const allowedByType =
       data.file_type === "source_video"
         ? settings.allowed_video_types
-        : data.file_type === "logo" || data.file_type === "template_asset"
-          ? settings.allowed_image_types
-          : ["audio/mpeg", "audio/mp4", "audio/wav", "audio/webm"];
+        : settings.allowed_image_types;
 
     if (!allowedByType.includes(data.mime_type)) {
       throw clientError("Tipo de arquivo não permitido.");

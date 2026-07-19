@@ -258,8 +258,12 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       if (aErr) throw clientError("Falha ao ler arquivos do projeto.");
       assetFiles = assets ?? [];
       for (const id of referencedAssetIds) {
-        if (!assetFiles.find((a) => a.id === id)) {
+        const found = assetFiles.find((a) => a.id === id);
+        if (!found) {
           throw clientError("Asset referenciado pelo template não encontrado.");
+        }
+        if (id === templateSettings.logo_file_id && !found.mime_type.startsWith("image/")) {
+          throw clientError("O logo do template precisa ser uma imagem.");
         }
       }
     }
@@ -400,15 +404,14 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     type SignedInput = {
       fileId: string;
       fileName: string;
-      fileType: "source_video" | "logo" | "music" | "template_asset";
+      fileType: "source_video" | "logo" | "template_asset";
       mimeType: string;
       signedUrl: string;
     };
-    const ALLOWED_INPUT_TYPES = new Set(["source_video", "logo", "music", "template_asset"]);
+    const ALLOWED_INPUT_TYPES = new Set(["source_video", "logo", "template_asset"]);
     const BUCKET_BY_TYPE: Record<string, string> = {
       source_video: "project-inputs",
       logo: "project-assets",
-      music: "project-assets",
       template_asset: "project-assets",
     };
     let signedInputs: SignedInput[];
