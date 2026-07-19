@@ -17,6 +17,16 @@ function hasBin(cmd: string): Promise<boolean> {
   });
 }
 
+function ffmpegHasSvg(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn("ffmpeg", ["-hide_banner", "-decoders"], { shell: false });
+    let out = "";
+    child.stdout.on("data", (b) => (out += b.toString()));
+    child.on("error", () => resolve(false));
+    child.on("close", () => resolve(/\bsvg\b/i.test(out)));
+  });
+}
+
 async function makeSyntheticSource(dest: string) {
   await new Promise<void>((resolve, reject) => {
     const args = [
