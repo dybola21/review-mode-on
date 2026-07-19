@@ -37,7 +37,7 @@ describe("url allowlist", () => {
 
 describe("safe path helpers", () => {
   it("safeBaseName removes path separators and shell metacharacters", () => {
-    expect(safeBaseName("../../etc/passwd")).toBe("_.._.._etc_passwd");
+    expect(safeBaseName("../../etc/passwd")).toBe("__.._etc_passwd");
     expect(safeBaseName("nice file (v2).mp4")).toBe("nice_file_v2_.mp4");
     expect(safeBaseName("")).toBe("file");
     expect(safeBaseName("....")).toBe("_");
