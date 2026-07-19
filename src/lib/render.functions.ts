@@ -97,19 +97,17 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
       } catch {
         body = null;
       }
-      const ok =
-        !!body &&
-        typeof body === "object" &&
-        ("status" in body
-          ? (body as { status?: string }).status === "ok"
-          : "ok" in body
-            ? (body as { ok?: boolean }).ok === true
-            : true);
+      const parsed =
+        body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+      const statusOk = parsed?.status === "ok";
+      const ffmpegOk = parsed?.ffmpeg === true;
+      const queueOk = parsed?.queue === "ready";
+      const ok = statusOk && ffmpegOk && queueOk;
       return {
         configured: true,
         available: ok,
         checkedAt: new Date().toISOString(),
-        message: ok ? "Servidor disponível." : "Resposta inesperada do servidor.",
+        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg ou fila).",
       };
     } catch (err) {
       clearTimeout(timer);
