@@ -14,6 +14,12 @@ import {
   getProject,
   updateProject,
 } from "@/lib/projects.functions";
+import { getAppSettings } from "@/lib/app-settings.functions";
+import { ProjectFilesSection } from "@/components/project-files-section";
+import { TemplateEditor } from "@/components/template-editor";
+import { VariationsEditor } from "@/components/variations-editor";
+import { RightsSection } from "@/components/rights-section";
+
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   head: () => ({
