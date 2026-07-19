@@ -97,7 +97,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
                 className="input"
                 value={tpl.identifier}
                 onChange={(e) => set("identifier", e.target.value)}
-                maxLength={80}
+                maxLength={60}
                 placeholder="@usuario"
               />
             </Field>
