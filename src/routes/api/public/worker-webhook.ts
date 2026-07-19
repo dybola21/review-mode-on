@@ -24,8 +24,8 @@ const webhookSchema = z.object({
 });
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  submitting: ["queued", "failed"],
-  queued: ["processing", "failed", "cancelled"],
+  submitting: ["queued", "processing", "failed"],
+  queued: ["queued", "processing", "failed", "cancelled"],
   processing: ["processing", "completed", "failed", "cancelled"],
   completed: [],
   failed: [],
