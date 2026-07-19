@@ -1,0 +1,14 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.vscode
+.idea
+tests/fixtures/*.mp4
+tests/fixtures/*.mov
+tests/fixtures/*.mkv
+*.md
+!README.md
