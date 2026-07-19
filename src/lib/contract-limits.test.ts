@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-  templateSettingsSchema,
-  makeVariationSettingsSchema,
-} from "./project-schemas";
+import { templateSettingsSchema, makeVariationSettingsSchema } from "./project-schemas";
 
 // Canonical limits shared with the worker contract (worker/src/types/contract.ts).
 // If either side changes, the paired tests here and in worker/tests/canonical-limits.test.ts
@@ -17,8 +14,7 @@ const CANONICAL = {
 describe("frontend canonical contract limits", () => {
   it(`page_name accepts exactly ${CANONICAL.page_name_max} chars and rejects +1`, () => {
     expect(
-      templateSettingsSchema.safeParse({ page_name: "a".repeat(CANONICAL.page_name_max) })
-        .success,
+      templateSettingsSchema.safeParse({ page_name: "a".repeat(CANONICAL.page_name_max) }).success,
     ).toBe(true);
     expect(
       templateSettingsSchema.safeParse({ page_name: "a".repeat(CANONICAL.page_name_max + 1) })
@@ -39,8 +35,7 @@ describe("frontend canonical contract limits", () => {
 
   it(`headline accepts exactly ${CANONICAL.headline_max} chars and rejects +1`, () => {
     expect(
-      templateSettingsSchema.safeParse({ headline: "a".repeat(CANONICAL.headline_max) })
-        .success,
+      templateSettingsSchema.safeParse({ headline: "a".repeat(CANONICAL.headline_max) }).success,
     ).toBe(true);
     expect(
       templateSettingsSchema.safeParse({ headline: "a".repeat(CANONICAL.headline_max + 1) })
@@ -64,8 +59,7 @@ describe("frontend canonical contract limits", () => {
       schema.safeParse({ ...base, variation_count: CANONICAL.variation_count_max }).success,
     ).toBe(true);
     expect(
-      schema.safeParse({ ...base, variation_count: CANONICAL.variation_count_max + 1 })
-        .success,
+      schema.safeParse({ ...base, variation_count: CANONICAL.variation_count_max + 1 }).success,
     ).toBe(false);
   });
 });
