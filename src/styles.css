@@ -148,10 +148,10 @@
   font-size: 0.875rem;
   outline: none;
   color: var(--color-foreground);
-}
 
-@utility input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  &:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 1px var(--color-primary);
+  }
 }
 
