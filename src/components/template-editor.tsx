@@ -4,10 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
-import {
-  getProjectFilePreviewUrl,
-  listProjectFiles,
-} from "@/lib/project-files.functions";
+import { getProjectFilePreviewUrl, listProjectFiles } from "@/lib/project-files.functions";
 import {
   DEFAULT_TEMPLATE_SETTINGS,
   templateSettingsSchema,
