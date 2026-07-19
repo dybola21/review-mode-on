@@ -1,82 +1,91 @@
 import { createHash } from "node:crypto";
+import type { VariationSettings } from "../types/contract.js";
 
 /**
  * Deterministic per-output parameters derived from (jobId, workerOutputId,
- * variationIndex). Guarantees that two runs of the same job produce the
- * same visual variations, even after a restart.
+ * variationIndex). Two runs of the same job produce identical variations
+ * even after a restart.
+ *
+ * Ranges arrive in UI units:
+ *  - brightness: -0.2..0.2
+ *  - contrast:   0.8..1.2
+ *  - saturation: 0.8..1.2
+ *  - temperature: -15..15  (UI slider units)
+ *  - scale:      1.0..1.1
+ *
+ * Temperature is converted linearly to the ffmpeg colorbalance range
+ * (-0.1..0.1): UI -15 → -0.1, UI 0 → 0, UI 15 → 0.1.
  */
 
 export interface VariationParams {
-  brightness: number; // -1..1 (ffmpeg eq)
-  contrast: number; // 0..2
-  saturation: number; // 0..2
-  temperatureShift: number; // -0.1..0.1 additive to red channel
-  scale: number; // 0.9..1.1
+  brightness: number; // -0.2..0.2 (eq)
+  contrast: number; // 0.8..1.2
+  saturation: number; // 0.8..1.2
+  temperatureShift: number; // -0.1..0.1 (ffmpeg colorbalance rs)
+  scale: number; // 1.0..1.1
 }
-
-interface Ranges {
-  brightness_range?: [number, number];
-  contrast_range?: [number, number];
-  saturation_range?: [number, number];
-  temperature_range?: [number, number];
-  scale_range?: [number, number];
-}
-
-const DEFAULTS: Required<Ranges> = {
-  brightness_range: [-0.05, 0.05],
-  contrast_range: [0.95, 1.1],
-  saturation_range: [0.95, 1.1],
-  temperature_range: [-0.03, 0.03],
-  scale_range: [0.98, 1.02],
-};
 
 const HARD_BOUNDS = {
   brightness: [-0.2, 0.2],
-  contrast: [0.5, 1.5],
-  saturation: [0.5, 1.5],
-  temperature: [-0.1, 0.1],
-  scale: [0.9, 1.1],
+  contrast: [0.8, 1.2],
+  saturation: [0.8, 1.2],
+  temperature: [-15, 15], // UI units
+  scale: [1.0, 1.1],
 } as const;
+
+export function temperatureUiToFfmpeg(ui: number): number {
+  // Linear map UI[-15, 15] -> ffmpeg[-0.1, 0.1] with clamp.
+  const clamped = Math.max(-15, Math.min(15, ui));
+  return round4((clamped / 15) * 0.1);
+}
 
 export function computeVariationParams(
   jobId: string,
   workerOutputId: string,
   variationIndex: number,
-  ranges: Ranges,
+  v: VariationSettings,
 ): VariationParams {
-  const merged: Required<Ranges> = {
-    brightness_range: clampRange(
-      ranges.brightness_range ?? DEFAULTS.brightness_range,
-      HARD_BOUNDS.brightness,
-    ),
-    contrast_range: clampRange(
-      ranges.contrast_range ?? DEFAULTS.contrast_range,
-      HARD_BOUNDS.contrast,
-    ),
-    saturation_range: clampRange(
-      ranges.saturation_range ?? DEFAULTS.saturation_range,
-      HARD_BOUNDS.saturation,
-    ),
-    temperature_range: clampRange(
-      ranges.temperature_range ?? DEFAULTS.temperature_range,
-      HARD_BOUNDS.temperature,
-    ),
-    scale_range: clampRange(ranges.scale_range ?? DEFAULTS.scale_range, HARD_BOUNDS.scale),
-  };
-  const seed = deriveSeed(`${jobId}|${workerOutputId}|${variationIndex}`);
+  const b = clampRange([v.brightness.min, v.brightness.max], HARD_BOUNDS.brightness);
+  const c = clampRange([v.contrast.min, v.contrast.max], HARD_BOUNDS.contrast);
+  const s = clampRange([v.saturation.min, v.saturation.max], HARD_BOUNDS.saturation);
+  const t = clampRange([v.temperature.min, v.temperature.max], HARD_BOUNDS.temperature);
+  const sc = clampRange([v.scale.min, v.scale.max], HARD_BOUNDS.scale);
+
+  const seed = deriveSeed(`${jobId}|${workerOutputId}|${variationIndex}|params`);
   const rng = mulberry32(seed);
+  const tempUi = pick(rng(), t);
   return {
-    brightness: pick(rng(), merged.brightness_range),
-    contrast: pick(rng(), merged.contrast_range),
-    saturation: pick(rng(), merged.saturation_range),
-    temperatureShift: pick(rng(), merged.temperature_range),
-    scale: pick(rng(), merged.scale_range),
+    brightness: pick(rng(), b),
+    contrast: pick(rng(), c),
+    saturation: pick(rng(), s),
+    temperatureShift: temperatureUiToFfmpeg(tempUi),
+    scale: pick(rng(), sc),
   };
 }
 
+/**
+ * Deterministic small watermark offset in pixels. Returns 0/0 when jitter
+ * is disabled. Bounded to `maxJitterPx` so the mark stays inside the
+ * image regardless of position/size.
+ */
+export function computeWatermarkOffset(
+  jobId: string,
+  workerOutputId: string,
+  variationIndex: number,
+  jitterEnabled: boolean,
+  maxJitterPx: number,
+): { dx: number; dy: number } {
+  if (!jitterEnabled || maxJitterPx <= 0) return { dx: 0, dy: 0 };
+  const seed = deriveSeed(`${jobId}|${workerOutputId}|${variationIndex}|wm`);
+  const rng = mulberry32(seed);
+  const dx = Math.round((rng() * 2 - 1) * maxJitterPx);
+  const dy = Math.round((rng() * 2 - 1) * maxJitterPx);
+  return { dx, dy };
+}
+
 function clampRange(r: [number, number], bounds: readonly [number, number]): [number, number] {
-  const lo = Math.max(bounds[0], Math.min(r[0], r[1]));
-  const hi = Math.min(bounds[1], Math.max(r[0], r[1]));
+  const lo = Math.max(bounds[0], Math.min(bounds[1], Math.min(r[0], r[1])));
+  const hi = Math.max(bounds[0], Math.min(bounds[1], Math.max(r[0], r[1])));
   return [lo, hi];
 }
 
@@ -91,7 +100,6 @@ function round4(n: number): number {
 
 function deriveSeed(input: string): number {
   const h = createHash("sha256").update(input).digest();
-  // Use first 4 bytes as unsigned int
   return h.readUInt32BE(0);
 }
 
