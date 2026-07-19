@@ -81,7 +81,7 @@ describe("POST /jobs", () => {
     const res = await app.inject({
       method: "POST",
       url: "/jobs",
-      headers: { authorization: "Bearer wrong", "idempotency-key": "k1", "content-type": "application/json" },
+      headers: { authorization: "Bearer wrong", "idempotency-key": "idem-key-abc", "content-type": "application/json" },
       payload,
     });
     expect(res.statusCode).toBe(401);
@@ -108,7 +108,7 @@ describe("POST /jobs", () => {
       url: "/jobs",
       headers: {
         authorization: `Bearer ${KEY}`,
-        "idempotency-key": "k1",
+        "idempotency-key": "idem-key-abc",
         "content-type": "application/json",
       },
       payload: bad,
@@ -128,7 +128,7 @@ describe("POST /jobs", () => {
       url: "/jobs",
       headers: {
         authorization: `Bearer ${KEY}`,
-        "idempotency-key": "k1",
+        "idempotency-key": "idem-key-abc",
         "content-type": "application/json",
       },
       payload: bad,
@@ -141,7 +141,7 @@ describe("POST /jobs", () => {
     const { app } = makeApp(dir);
     const headers = {
       authorization: `Bearer ${KEY}`,
-      "idempotency-key": "k1",
+      "idempotency-key": "idem-key-abc",
       "content-type": "application/json",
     };
     const a = await app.inject({ method: "POST", url: "/jobs", headers, payload });
