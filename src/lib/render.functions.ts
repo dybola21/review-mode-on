@@ -404,12 +404,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       mimeType: string;
       signedUrl: string;
     };
-    const ALLOWED_INPUT_TYPES = new Set([
-      "source_video",
-      "logo",
-      "music",
-      "template_asset",
-    ]);
+    const ALLOWED_INPUT_TYPES = new Set(["source_video", "logo", "music", "template_asset"]);
     const BUCKET_BY_TYPE: Record<string, string> = {
       source_video: "project-inputs",
       logo: "project-assets",
@@ -504,10 +499,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         console.error("[submitRenderJob] cleanup storage", e);
       }
       try {
-        await supabaseAdmin
-          .from("render_output_targets")
-          .delete()
-          .eq("render_job_id", jobId);
+        await supabaseAdmin.from("render_output_targets").delete().eq("render_job_id", jobId);
       } catch (e) {
         console.error("[submitRenderJob] cleanup targets", e);
       }
