@@ -35,11 +35,10 @@ type UploadItem = {
   abort?: AbortController;
 };
 
-function fileKind(mime: string): UploadItem["file_type"] {
+function fileKind(mime: string): UploadItem["file_type"] | null {
   if (mime.startsWith("video/")) return "source_video";
   if (mime.startsWith("image/")) return "template_asset";
-  if (mime.startsWith("audio/")) return "music";
-  return "template_asset";
+  return null; // áudio/outros: bloqueado nesta versão
 }
 
 function humanSize(bytes: number): string {
