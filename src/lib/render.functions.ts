@@ -319,7 +319,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
-    if (totalOutputs >= HARD_MAX_OUTPUTS) {
+    if (totalOutputs > HARD_MAX_OUTPUTS) {
       throw clientError("Combinação de arquivos e variações excede o limite permitido.");
     }
 
