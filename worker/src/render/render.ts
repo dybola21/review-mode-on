@@ -312,8 +312,6 @@ async function uploadWithRenew(
   }
 }
 
-
-
 function classifyError(err: unknown): { code: string; message: string } {
   if (err instanceof DownloadError) return { code: err.code, message: err.message };
   if (err instanceof UploadError) return { code: err.code, message: err.message };
