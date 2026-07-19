@@ -1,9 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
+import {
+  getProjectFilePreviewUrl,
+  listProjectFiles,
+} from "@/lib/project-files.functions";
 import {
   DEFAULT_TEMPLATE_SETTINGS,
   templateSettingsSchema,
@@ -17,6 +21,50 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
   );
 
   const saveFn = useServerFn(updateTemplateSettings);
+  const listFn = useServerFn(listProjectFiles);
+  const previewFn = useServerFn(getProjectFilePreviewUrl);
+
+  const filesQuery = useQuery({
+    queryKey: ["project-files", projectId],
+    queryFn: () => listFn({ data: { project_id: projectId } }),
+  });
+
+  const imageFiles = useMemo(
+    () =>
+      (filesQuery.data ?? []).filter(
+        (f) =>
+          typeof f.mime_type === "string" &&
+          f.mime_type.startsWith("image/") &&
+          f.status === "uploaded",
+      ),
+    [filesQuery.data],
+  );
+
+  // Signed URL for the currently-selected logo (for the live preview).
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!tpl.logo_file_id) {
+      setLogoUrl(null);
+      return;
+    }
+    // Ensure the selected logo still exists among the project images.
+    if (!imageFiles.find((f) => f.id === tpl.logo_file_id)) {
+      setLogoUrl(null);
+      return;
+    }
+    previewFn({ data: { id: tpl.logo_file_id } })
+      .then((r) => {
+        if (alive) setLogoUrl(r.url);
+      })
+      .catch(() => {
+        if (alive) setLogoUrl(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [tpl.logo_file_id, imageFiles, previewFn]);
+
   const save = useMutation({
     mutationFn: () => saveFn({ data: { project_id: projectId, template: tpl } }),
     onSuccess: () => toast.success("Template salvo."),
@@ -57,6 +105,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
               />
             </Field>
           </div>
+
           <Field label="Frase principal">
             <textarea
               className="input min-h-[64px]"
@@ -64,6 +113,44 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
               onChange={(e) => set("headline", e.target.value)}
               maxLength={200}
             />
+          </Field>
+
+          <Field label="Logo">
+            {imageFiles.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Envie uma imagem no bloco de arquivos para poder selecioná-la como logo.
+              </p>
+            ) : (
+              <div className="flex items-center gap-3">
+                <select
+                  className="input flex-1"
+                  value={tpl.logo_file_id ?? ""}
+                  onChange={(e) => set("logo_file_id", e.target.value ? e.target.value : null)}
+                >
+                  <option value="">— Sem logo —</option>
+                  {imageFiles.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.file_name}
+                    </option>
+                  ))}
+                </select>
+                {tpl.logo_file_id && (
+                  <button
+                    type="button"
+                    onClick={() => set("logo_file_id", null)}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+            )}
+            {tpl.logo_file_id && logoUrl && (
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-surface p-2">
+                <img src={logoUrl} alt="Logo" className="max-h-10 object-contain" />
+                <span className="text-xs text-muted-foreground">Preview do logo selecionado</span>
+              </div>
+            )}
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -133,7 +220,7 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
           </div>
         </div>
 
-        <TemplatePreview9x16 template={tpl} />
+        <TemplatePreview9x16 template={tpl} logoUrl={logoUrl} />
       </div>
     </div>
   );
