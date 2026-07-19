@@ -62,7 +62,7 @@ export const variationSettingsSchema = z
     temperature: minMax(-15, 15),
     scale: minMax(1.0, 1.1),
     watermark_position_jitter: z.boolean().default(false),
-    variation_count: z.number().int().min(1).max(50).default(1),
+    variation_count: z.number().int().min(1).max(100).default(1),
   })
   .strict();
 
