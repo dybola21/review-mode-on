@@ -31,13 +31,7 @@ export const Route = createFileRoute("/_authenticated/projects/$projectId")({
   ),
 });
 
-function EditProjectErrorBoundary({
-  error,
-  reset,
-}: {
-  error: Error;
-  reset: () => void;
-}) {
+function EditProjectErrorBoundary({ error, reset }: { error: Error; reset: () => void }) {
   const router = useRouter();
   return (
     <div className="mx-auto max-w-2xl px-6 py-10 text-center">
@@ -63,7 +57,6 @@ function EditProjectErrorBoundary({
     </div>
   );
 }
-
 
 function EditProjectPage() {
   const { projectId } = Route.useParams();
