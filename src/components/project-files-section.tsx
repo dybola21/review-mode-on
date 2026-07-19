@@ -20,7 +20,7 @@ import {
   prepareProjectFileUpload,
 } from "@/lib/project-files.functions";
 import type { getAppSettings } from "@/lib/app-settings.functions";
-import { supabase } from "@/integrations/supabase/client";
+
 import { extensionMatchesMime, sanitizeFileName } from "@/lib/project-schemas";
 
 type Settings = Awaited<ReturnType<typeof getAppSettings>>;
