@@ -550,7 +550,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
-    // 11) Mark queued
+    // 11) Mark queued — race-safe: only if still 'submitting'. If the
+    //     worker already sent a webhook that advanced us to 'processing'
+    //     or a terminal state, we do NOT regress.
     const { error: updErr } = await supabaseAdmin
       .from("render_jobs")
       .update({
@@ -559,8 +561,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         attempt_count: 1,
         started_at: new Date().toISOString(),
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .eq("status", "submitting");
     if (updErr) console.error("[submitRenderJob] update", updErr);
+
+    // Ensure worker_job_id is bound even if state advanced past 'submitting'.
+    await supabaseAdmin
+      .from("render_jobs")
+      .update({ worker_job_id: workerJobId })
+      .eq("id", jobId)
+      .is("worker_job_id", null);
 
     await supabaseAdmin.from("projects").update({ status: "processing" }).eq("id", data.project_id);
 
