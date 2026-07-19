@@ -157,7 +157,7 @@ export async function runJob(
       emitProgress(db, row, stepsDone, totalSteps);
 
       // Upload with renewal on 401/403.
-      await uploadWithRenew(outLocal, target, payload, cfg);
+      await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg);
       db.recordUploadedOutput(
         row.worker_job_id,
         target.workerOutputId,
