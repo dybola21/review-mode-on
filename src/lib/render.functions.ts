@@ -226,9 +226,10 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 2) Source files
     const { data: files, error: filesErr } = await context.supabase
       .from("project_files")
-      .select("id, file_name, storage_path, mime_type, file_type")
+      .select("id, file_name, storage_path, mime_type, file_type, status")
       .eq("project_id", data.project_id)
-      .eq("file_type", "source_video");
+      .eq("file_type", "source_video")
+      .eq("status", "uploaded");
     if (filesErr) throw clientError("Falha ao ler arquivos do projeto.");
     if (!files || files.length === 0) {
       throw clientError("Envie pelo menos um vídeo antes de processar.");
