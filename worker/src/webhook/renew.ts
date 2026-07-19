@@ -44,7 +44,7 @@ async function post<T>(
 
 export async function renewInputUrl(payload: JobPayload, fileId: string, cfg: Config): Promise<string> {
   const raw = await post<unknown>(
-    renewUrl(cfg, "worker-renew-input"),
+    cfg.APP_RENEW_INPUT_URL,
     {
       jobId: payload.jobId,
       workerJobId: payload.jobId, // not the worker-side id — app matches by jobId
@@ -63,7 +63,7 @@ export async function renewUploadUrl(
   cfg: Config,
 ): Promise<string> {
   const raw = await post<unknown>(
-    renewUrl(cfg, "worker-renew-upload"),
+    cfg.APP_RENEW_UPLOAD_URL,
     {
       jobId: payload.jobId,
       workerJobId: payload.jobId,
