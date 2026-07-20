@@ -199,7 +199,10 @@ export function bucketForFileType(fileType: string): string | null {
  *  - logo: must start with image/
  *  - template_asset: image/ or video/ (asset overlays)
  */
-export function mimeAllowedForFileType(fileType: string, mimeType: string | null | undefined): boolean {
+export function mimeAllowedForFileType(
+  fileType: string,
+  mimeType: string | null | undefined,
+): boolean {
   if (!mimeType || typeof mimeType !== "string") return false;
   const m = mimeType.toLowerCase();
   if (fileType === "source_video") return m.startsWith("video/");
@@ -260,4 +263,3 @@ export function validateRenderInput(
   if (!mimeAllowedForFileType(file.file_type, file.mime_type)) return "invalid_mime";
   return null;
 }
-

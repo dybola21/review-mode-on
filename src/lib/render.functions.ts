@@ -12,7 +12,6 @@ import {
   validateRenderInput,
 } from "./render-security";
 
-
 function clientError(msg: string): Error {
   return new Error(msg);
 }
@@ -256,9 +255,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     if (referencedAssetIds.size > 0) {
       const { data: assets, error: aErr } = await context.supabase
         .from("project_files")
-        .select(
-          "id, user_id, project_id, file_name, storage_path, mime_type, file_type, status",
-        )
+        .select("id, user_id, project_id, file_name, storage_path, mime_type, file_type, status")
         .eq("project_id", data.project_id)
         .eq("status", "uploaded")
         .in("id", Array.from(referencedAssetIds));
@@ -274,7 +271,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         }
       }
     }
-
 
     // 3) Rights
     const { data: rights } = await context.supabase
@@ -354,7 +350,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         throw clientError("Um dos arquivos do projeto está inválido para renderização.");
       }
     }
-
 
     // 6) Create job
 
@@ -635,8 +630,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Conflito ao vincular o processamento. Tente novamente.");
     }
 
-
-
     // Only advance the project to 'processing' if it isn't already
     // completed/failed by an early webhook. Prevents regression.
     await supabaseAdmin
@@ -644,7 +637,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       .update({ status: "processing" })
       .eq("id", data.project_id)
       .not("status", "in", "(completed,failed)");
-
 
     return { job_id: jobId };
   });

@@ -54,9 +54,7 @@ function makeSuccessfulChain(returnValue: { data: unknown; error: unknown }): Fr
 function buildRequest(payload: unknown, opts?: { badSig?: boolean; oldTs?: boolean }): Request {
   const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
   const ts = opts?.oldTs ? String(NOW - 999_999) : String(NOW);
-  const sig = opts?.badSig
-    ? "deadbeef".repeat(8)
-    : computeSignature(SECRET, ts, raw);
+  const sig = opts?.badSig ? "deadbeef".repeat(8) : computeSignature(SECRET, ts, raw);
   return new Request("http://x/api/public/worker-webhook", {
     method: "POST",
     headers: {
@@ -141,7 +139,9 @@ function buildAdmin(opts: {
   jobUpdateError?: unknown;
   bindReread?: string | null; // what re-read returns after bind attempt
 }): AdminMock {
-  const targets = [{ worker_output_id: "out-1", storage_path: `${USER_ID}/${PROJECT_ID}/${JOB_ID}/out.mp4` }];
+  const targets = [
+    { worker_output_id: "out-1", storage_path: `${USER_ID}/${PROJECT_ID}/${JOB_ID}/out.mp4` },
+  ];
   const jobRow = {
     id: JOB_ID,
     status: "queued",
@@ -205,9 +205,7 @@ function buildAdmin(opts: {
         },
       })),
     },
-    rpc: vi.fn(async () =>
-      opts.rpcResult ?? { data: { ok: true }, error: null },
-    ),
+    rpc: vi.fn(async () => opts.rpcResult ?? { data: { ok: true }, error: null }),
   };
   return admin;
 }

@@ -85,21 +85,14 @@ async function releaseNonceAnd503(
   return new Response("Service unavailable", { status: 503 });
 }
 
-type StorageCheck =
-  | { ok: true; exists: boolean; size: number }
-  | { ok: false; transient: true };
+type StorageCheck = { ok: true; exists: boolean; size: number } | { ok: false; transient: true };
 
-async function verifyStorageObject(
-  admin: AdminLike,
-  storagePath: string,
-): Promise<StorageCheck> {
+async function verifyStorageObject(admin: AdminLike, storagePath: string): Promise<StorageCheck> {
   const parts = storagePath.split("/");
   if (parts.length < 2) return { ok: true, exists: false, size: 0 };
   const parent = parts.slice(0, -1).join("/");
   const name = parts[parts.length - 1]!;
-  const { data, error } = await admin.storage
-    .from("render-outputs")
-    .list(parent, { search: name });
+  const { data, error } = await admin.storage.from("render-outputs").list(parent, { search: name });
   // Storage lookup failure is transient — NEVER "missing_upload".
   if (error) return { ok: false, transient: true };
   const found = (data ?? []).find((o) => o.name === name);
@@ -157,8 +150,9 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         const nonceKey = `webhook:${evt.eventId}`;
         {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: nErr } = await (supabaseAdmin.from("worker_request_nonces") as any)
-            .insert({ nonce: nonceKey, purpose: "webhook" });
+          const { error: nErr } = await (supabaseAdmin.from("worker_request_nonces") as any).insert(
+            { nonce: nonceKey, purpose: "webhook" },
+          );
           if (nErr) {
             const code = (nErr as { code?: string }).code;
             if (code === "23505") {
@@ -211,7 +205,12 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               .eq("id", job.id)
               .maybeSingle();
             if (rrErr || !reread) {
-              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "worker rebind lookup", rrErr);
+              return await releaseNonceAnd503(
+                supabaseAdmin,
+                nonceKey,
+                "worker rebind lookup",
+                rrErr,
+              );
             }
             if (reread.worker_job_id !== evt.workerJobId) {
               return new Response("Unauthorized", { status: 401 });
@@ -295,11 +294,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               }
               const check = await verifyStorageObject(supabaseAdmin, targetPath);
               if (!check.ok) {
-                return await releaseNonceAnd503(
-                  supabaseAdmin,
-                  nonceKey,
-                  "storage check transient",
-                );
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "storage check transient");
               }
               if (!check.exists) {
                 // Object genuinely absent — release nonce and answer 503
@@ -338,17 +333,13 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               });
             }
 
-
             // Single atomic RPC: locks job, validates exact set, upserts
             // outputs and finalizes job + project — all in one transaction.
-            const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc(
-              "finalize_render_job",
-              {
-                _job_id: job.id,
-                _worker_job_id: evt.workerJobId,
-                _outputs: enriched,
-              },
-            );
+            const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc("finalize_render_job", {
+              _job_id: job.id,
+              _worker_job_id: evt.workerJobId,
+              _outputs: enriched,
+            });
             if (rpcErr) {
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "finalize", rpcErr);
             }
@@ -428,7 +419,6 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "project processing", ppErr);
             }
           }
-
 
           return new Response("ok", { status: 200 });
         } catch (err) {

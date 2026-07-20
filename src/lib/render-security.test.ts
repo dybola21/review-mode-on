@@ -17,7 +17,6 @@ import {
   verifySignature,
 } from "./render-security";
 
-
 const SECRET = "test-secret-abc-123";
 
 describe("publicAppUrlSchema", () => {
@@ -259,7 +258,6 @@ describe("validateRenderInput", () => {
     expect(validateRenderInput({ ...base, mime_type: null }, u, p)).toBe("invalid_mime");
   });
 });
-
 
 describe("sanitizeBaseName", () => {
   it("keeps safe characters", () => {
