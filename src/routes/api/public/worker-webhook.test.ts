@@ -347,10 +347,49 @@ describe("worker-webhook timestamp contract", () => {
     expect(res.status).toBe(400);
   });
 
-  it("rejects body timestamp that differs from header with 401", async () => {
-    // Signed header uses NOW; body carries NOW-1 → mismatch.
-    const raw = JSON.stringify({ ...processingPayload(), timestamp: NOW - 1 });
+  it("accepts body timestamp that differs from header (retry/dispatch skew)", async () => {
+    // Header timestamp is created at dispatch/retry and does not need to match
+    // the body timestamp created at enqueue. Freshness applies to header only.
+    const raw = JSON.stringify({ ...processingPayload(), timestamp: NOW - 30 });
     const ts = String(NOW);
+    const sig = computeSignature(SECRET, ts, raw);
+    const req = new Request("http://x/api/public/worker-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-worker-signature": sig,
+        "x-worker-timestamp": ts,
+      },
+      body: raw,
+    });
+    const res = await invoke(buildAdmin({ storageExists: true }), req);
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts retry: new header timestamp + same rawBody (fresh eventId)", async () => {
+    // Simulates a worker retry: same body (same enqueue-time timestamp),
+    // but a new dispatch header + signature. Must be accepted while the
+    // eventId has not yet been recorded.
+    const body = { ...processingPayload(), timestamp: NOW - 60 };
+    const raw = JSON.stringify(body);
+    const ts = String(NOW + 5);
+    const sig = computeSignature(SECRET, ts, raw);
+    const req = new Request("http://x/api/public/worker-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-worker-signature": sig,
+        "x-worker-timestamp": ts,
+      },
+      body: raw,
+    });
+    const res = await invoke(buildAdmin({ storageExists: true }), req);
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects future header timestamp with 401", async () => {
+    const raw = JSON.stringify(processingPayload());
+    const ts = String(NOW + 999_999);
     const sig = computeSignature(SECRET, ts, raw);
     const req = new Request("http://x/api/public/worker-webhook", {
       method: "POST",
@@ -364,6 +403,38 @@ describe("worker-webhook timestamp contract", () => {
     const res = await invoke(buildAdmin({ storageExists: true }), req);
     expect(res.status).toBe(401);
   });
+
+  it("rejects tampered signature with 401", async () => {
+    const res = await invoke(
+      buildAdmin({ storageExists: true }),
+      buildRequest(processingPayload(), { badSig: true }),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 200 idempotently for a duplicate eventId (nonce conflict)", async () => {
+    // Simulate the unique-violation raised when the same eventId is inserted twice.
+    const adminDup = {
+      from: (table: string) => {
+        if (table === "worker_request_nonces") {
+          const chain: Record<string, unknown> = {};
+          const p = () => chain;
+          chain.insert = () => chain;
+          chain.delete = p;
+          chain.eq = p;
+          chain.then = (fn: (v: unknown) => unknown) =>
+            Promise.resolve({ data: null, error: { code: "23505" } }).then(fn);
+          return chain;
+        }
+        return makeThenableChain({ data: null, error: null });
+      },
+      storage: { from: () => ({ list: async () => ({ data: [], error: null }) }) },
+      rpc: async () => ({ data: { ok: true }, error: null }),
+    };
+    const res = await invoke(adminDup, buildRequest(processingPayload()));
+    expect(res.status).toBe(200);
+  });
+
 
   it("processing transitions queued → processing (200)", async () => {
     const res = await invoke(
