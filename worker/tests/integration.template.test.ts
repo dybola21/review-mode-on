@@ -5,13 +5,10 @@ import path from "node:path";
 import os from "node:os";
 import { buildTemplateOverlay } from "../src/render/template.js";
 import { renderOutput } from "../src/render/ffmpeg.js";
-import { computeVariationParams, computeWatermarkOffset } from "../src/render/variation.js";
 import { ffprobe } from "../src/storage/download.js";
-import type { TemplateSettings, VariationSettings } from "../src/types/contract.js";
+import type { TemplateSettings } from "../src/types/contract.js";
 
-// Production capability check. If any of these are missing the test MUST fail —
-// the CI installs ffmpeg, ffprobe and librsvg2-bin, and production Docker does
-// the same, so a missing binary is a real regression, not an environment quirk.
+// Production capability check.
 function requireBin(cmd: string, arg = "-version"): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, [arg], { shell: false });
@@ -27,22 +24,15 @@ const TEMPLATE: TemplateSettings = {
   identifier: "@meucanal",
   headline: "Título de teste da campanha",
   logo_file_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  background_color: "#0F0F12", // near-black header
+  background_color: "#0F0F12",
   text_color: "#FFFFFF",
-  accent_color: "#FF5A1F", // recognisable accent bar
+  accent_color: "#FF5A1F",
   watermark_position: "bottom-right",
   watermark_opacity: 0.6,
   header_height_ratio: 0.12,
-};
-
-const VARIATION: VariationSettings = {
-  brightness: { min: 0, max: 0 },
-  contrast: { min: 1, max: 1 },
-  saturation: { min: 1, max: 1 },
-  temperature: { min: 0, max: 0 },
-  scale: { min: 1, max: 1 },
-  watermark_position_jitter: true,
-  variation_count: 2,
+  header_image_fit: "cover",
+  header_image_position_x: 0.5,
+  header_image_position_y: 0.5,
 };
 
 async function runFfmpeg(args: string[]): Promise<void> {
