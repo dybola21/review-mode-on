@@ -96,6 +96,17 @@ export async function runJob(
 
   const heartbeat = new WallClockLimit(jobHardMs);
 
+  // Periodic heartbeat while the job is active (every 5s). Ensures the
+  // scheduler watchdog can distinguish a live job doing long blocking I/O
+  // from a stuck one.
+  const heartbeatInterval = setInterval(() => {
+    try {
+      db.heartbeat(row.worker_job_id);
+    } catch {
+      /* noop */
+    }
+  }, 5_000);
+
   log.info(
     { inputs: payload.inputFiles.length, outputs: payload.outputTargets.length },
     "job_claimed",
@@ -111,6 +122,7 @@ export async function runJob(
   });
 
   try {
+    db.setStage(row.worker_job_id, "downloading");
     const localById = new Map<string, { path: string; input: InputFile }>();
 
     for (const inp of payload.inputFiles) {
@@ -164,6 +176,7 @@ export async function runJob(
       headerImageNaturalSize = null;
     }
 
+    db.setStage(row.worker_job_id, "preparing");
     const overlay = await buildTemplateOverlay({
       width: OUT_W,
       height: OUT_H,
@@ -217,6 +230,7 @@ export async function runJob(
         throw new RenderError("invalid_job", "sourceFileId não encontrado nos inputs.");
       }
 
+      db.setStage(row.worker_job_id, "rendering");
       log.info(
         { sourceFileId: target.sourceFileId, workerOutputId: target.workerOutputId },
         "render_started",
@@ -268,6 +282,7 @@ export async function runJob(
         "render_completed",
       );
 
+      db.setStage(row.worker_job_id, "uploading");
       log.info({ workerOutputId: target.workerOutputId }, "upload_started");
       await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg, jobCancel.signal);
       log.info({ workerOutputId: target.workerOutputId }, "upload_completed");
@@ -357,6 +372,7 @@ export async function runJob(
     });
   } finally {
     clearTimeout(wallTimer);
+    clearInterval(heartbeatInterval);
     cancel.removeEventListener("abort", shutdownForward);
     try {
       await fs.rm(jobRoot, { recursive: true, force: true });
@@ -495,9 +511,7 @@ export class RecoveryDeferError extends Error {
 }
 
 export type VerifyRetryResult =
-  | { kind: "ok"; exists: boolean; size: number }
-  | { kind: "auth" }
-  | { kind: "transient" };
+  { kind: "ok"; exists: boolean; size: number } | { kind: "auth" } | { kind: "transient" };
 
 export function decideRecoveryAction(
   v: VerifyRetryResult,

@@ -205,6 +205,71 @@ export const listRenderOutputs = createServerFn({ method: "GET" })
   });
 
 // -----------------------------------------------------------------------
+// Worker diagnostics — proxied through the app so ownership is enforced
+// via RLS. Never exposes worker URL / API key / payload.
+// -----------------------------------------------------------------------
+
+export type RenderJobDiagnostics = {
+  status: string;
+  stage: string;
+  progress: number;
+  queuePosition: number | null;
+  attemptCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  updatedAt: string;
+  heartbeatAt: string | null;
+  elapsedSeconds: number;
+  lastErrorCode: string | null;
+  running: boolean;
+} | null;
+
+const DIAG_ACTIVE = new Set(["queued", "submitting", "processing"]);
+
+export const getRenderJobDiagnostics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => projectIdSchema.parse(data))
+  .handler(async ({ data, context }): Promise<RenderJobDiagnostics> => {
+    // RLS-scoped read — ownership enforced by the policy on render_jobs.
+    const { data: rows, error } = await context.supabase
+      .from("render_jobs")
+      .select("id, worker_job_id, status")
+      .eq("project_id", data.project_id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (error) return null;
+    const job = rows?.[0];
+    if (!job || !job.worker_job_id) return null;
+    if (!DIAG_ACTIVE.has(job.status)) return null;
+
+    const workerUrl = process.env.VIDEO_WORKER_URL;
+    const workerKey = process.env.VIDEO_WORKER_API_KEY;
+    if (!workerUrl || !workerKey) return null;
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(`${workerUrl.replace(/\/+$/, "")}/internal/job-status`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${workerKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ jobId: job.id, workerJobId: job.worker_job_id }),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (res.status !== 200) return null;
+      const body = (await res.json().catch(() => null)) as RenderJobDiagnostics;
+      if (!body || typeof body !== "object") return null;
+      return body;
+    } catch {
+      clearTimeout(timer);
+      return null;
+    }
+  });
+
+// -----------------------------------------------------------------------
 // Signed download URL for a single output
 // -----------------------------------------------------------------------
 const outputIdSchema = z.object({ output_id: z.string().uuid() });

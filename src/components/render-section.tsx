@@ -3,7 +3,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, Loader2, PlayCircle, RefreshCw, Server } from "lucide-react";
 import { toast } from "sonner";
-import { checkWorkerHealth, getLatestRenderJob, submitRenderJob } from "@/lib/render.functions";
+import {
+  checkWorkerHealth,
+  getLatestRenderJob,
+  getRenderJobDiagnostics,
+  submitRenderJob,
+  type RenderJobDiagnostics,
+} from "@/lib/render.functions";
 import { listProjectFiles } from "@/lib/project-files.functions";
 
 const ACTIVE = new Set(["queued", "submitting", "processing"]);
@@ -25,6 +31,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
   const jobFn = useServerFn(getLatestRenderJob);
   const submitFn = useServerFn(submitRenderJob);
   const filesFn = useServerFn(listProjectFiles);
+  const diagFn = useServerFn(getRenderJobDiagnostics);
 
   const health = useQuery({
     queryKey: ["worker-health"],
@@ -44,6 +51,16 @@ export function RenderSection({ projectId }: { projectId: string }) {
     refetchInterval: (q) => {
       const s = q.state.data?.status;
       return s && ACTIVE.has(s) ? 4000 : false;
+    },
+  });
+
+  const diagnostics = useQuery({
+    queryKey: ["render-diagnostics", projectId],
+    queryFn: () => diagFn({ data: { project_id: projectId } }),
+    enabled: !!job.data && ACTIVE.has(job.data.status),
+    refetchInterval: (q) => {
+      const s = job.data?.status;
+      return s && ACTIVE.has(s) ? 4000 : q.state.data ? false : false;
     },
   });
 
@@ -143,6 +160,10 @@ export function RenderSection({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {diagnostics.data && ACTIVE.has(job.data?.status ?? "") && (
+        <DiagnosticsBlock d={diagnostics.data} />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => submit.mutate()}
@@ -166,6 +187,51 @@ export function RenderSection({ projectId }: { projectId: string }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function fmtDuration(s: number): string {
+  const sec = Math.max(0, Math.round(s));
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  if (m <= 0) return `${r}s`;
+  return `${m}m${r.toString().padStart(2, "0")}s`;
+}
+
+function DiagnosticsBlock({ d }: { d: NonNullable<RenderJobDiagnostics> }) {
+  const title = "Diagnóstico";
+  let detail = "";
+  if (d.status === "queued" && d.queuePosition != null) {
+    detail = `Na fila — posição ${d.queuePosition}`;
+  } else if (d.stage === "downloading") {
+    detail = `Baixando entradas — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "preparing") {
+    detail = `Preparando template — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "rendering") {
+    detail = `Renderizando — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "uploading") {
+    detail = `Upload — ${d.progress}%`;
+  } else if (d.stage === "claimed") {
+    detail = `Iniciando — ${fmtDuration(d.elapsedSeconds)}`;
+  } else {
+    detail = `${d.stage} — ${fmtDuration(d.elapsedSeconds)}`;
+  }
+
+  const hbAgeSec = d.heartbeatAt
+    ? Math.max(0, Math.round((Date.now() - Date.parse(d.heartbeatAt)) / 1000))
+    : null;
+  const stale = hbAgeSec != null && hbAgeSec >= 30;
+
+  return (
+    <div className="rounded-md border border-border/60 bg-surface/60 p-3 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground">tentativa {d.attemptCount}</span>
+      </div>
+      <p className="mt-1 text-sm text-foreground">{detail}</p>
+      {stale && <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>}
+      {d.lastErrorCode && <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>}
     </div>
   );
 }

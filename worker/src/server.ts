@@ -35,8 +35,8 @@ async function main(): Promise<void> {
   });
 
   let ready = true;
-  registerHealth(app, db, cfg, () => ready);
-  registerJobs(app, db, cfg, () => ready);
+  registerHealth(app, db, cfg, () => ready, scheduler);
+  registerJobs(app, db, cfg, () => ready, scheduler);
 
   app.setErrorHandler((err, _req, reply) => {
     const msg = err instanceof Error ? err.message : "internal";
