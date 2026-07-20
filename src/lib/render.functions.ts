@@ -630,6 +630,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
     let workerJobId: string | null = null;
+    let failure: WorkerFailure | null = null;
     try {
       const res = await fetch(`${workerUrl.replace(/\/+$/, "")}/jobs`, {
         method: "POST",
@@ -642,27 +643,39 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         signal: ctrl.signal,
       });
       clearTimeout(timer);
-      if (!res.ok) throw new Error(`worker ${res.status}`);
-      const body = (await res.json().catch(() => null)) as {
-        workerJobId?: string;
-      } | null;
-      if (!body?.workerJobId || typeof body.workerJobId !== "string") {
-        throw new Error("invalid worker response");
+      if (!res.ok) {
+        // Safely read the JSON envelope — never log its body.
+        const body = await res.json().catch(() => null);
+        const errCode = parseWorkerErrorEnvelope(body);
+        failure = classifyWorkerHttpFailure(res.status, errCode);
+      } else {
+        const body = (await res.json().catch(() => null)) as {
+          workerJobId?: string;
+        } | null;
+        if (!body?.workerJobId || typeof body.workerJobId !== "string") {
+          failure = WORKER_INVALID_RESPONSE;
+        } else {
+          workerJobId = body.workerJobId;
+          logSubmit("worker_accepted", { projectId: data.project_id, jobId });
+        }
       }
-      workerJobId = body.workerJobId;
-      logSubmit("worker_accepted", { projectId: data.project_id, jobId });
     } catch (err) {
       clearTimeout(timer);
-      console.error("[submitRenderJob] worker", err);
-      await failJob("worker_unreachable", "Servidor temporariamente indisponível.");
+      // Timeout / DNS / TCP / abort — never got a response from the worker.
+      console.error("[submitRenderJob] worker network", (err as Error)?.name ?? "err");
+      failure = WORKER_UNREACHABLE;
+    }
+    if (failure) {
+      await failJob(failure.code, failure.message);
       await cleanupJobArtifactsSafely();
       logSubmit("submission_failed", {
         projectId: data.project_id,
         jobId,
-        code: "worker_unreachable",
+        code: failure.code,
       });
       throw clientError("Não foi possível iniciar o processamento.");
     }
+
 
     // 11) Race-safe status/binding update.
     //     - Never regress processing/completed/failed/cancelled → queued.
