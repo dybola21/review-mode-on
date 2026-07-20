@@ -104,8 +104,8 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Template do projeto</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Envie uma arte pronta (logo + textos) que ocupará o topo do vídeo 9:16. O vídeo entra
-          logo abaixo, sem sobreposição.
+          Envie uma arte pronta (logo + textos) que ocupará o topo do vídeo 9:16. O vídeo entra logo
+          abaixo, sem sobreposição.
         </p>
       </div>
 
@@ -132,8 +132,8 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
                   ))}
                 </select>
                 <p className="text-[11px] text-muted-foreground">
-                  Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para
-                  evitar corte no modo &quot;Preencher&quot;.
+                  Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para evitar
+                  corte no modo &quot;Preencher&quot;.
                 </p>
                 {tpl.header_image_file_id && headerUrl && (
                   <div className="rounded-md border border-border bg-surface p-2">

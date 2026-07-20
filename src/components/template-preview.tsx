@@ -15,8 +15,7 @@ const POSITION_CLASS: Record<TemplateSettings["watermark_position"], string> = {
 
 export function TemplatePreview9x16({ template, headerUrl, logoUrl }: Props) {
   const useHeaderArt = Boolean(template.header_image_file_id);
-  const fitClass =
-    template.header_image_fit === "contain" ? "object-contain" : "object-cover";
+  const fitClass = template.header_image_fit === "contain" ? "object-contain" : "object-cover";
 
   return (
     <div className="mx-auto w-full max-w-[280px]">
@@ -103,10 +102,7 @@ function LegacyHeader({
         <div className="truncate text-xs font-semibold">{template.page_name}</div>
       )}
       {template.identifier && (
-        <div
-          className="truncate text-[10px] opacity-80"
-          style={{ color: template.accent_color }}
-        >
+        <div className="truncate text-[10px] opacity-80" style={{ color: template.accent_color }}>
           {template.identifier}
         </div>
       )}
