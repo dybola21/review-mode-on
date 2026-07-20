@@ -49,6 +49,9 @@ export interface BuildTemplateArgs {
   logoPath: string | null;
   /** Absolute path to the header-art image on disk, when template.header_image_file_id is set. */
   headerImagePath: string | null;
+  /** Natural dimensions of the header-art image, required in cover mode to
+   * reproduce the exact framing chosen in the UI. */
+  headerImageNaturalSize?: { w: number; h: number } | null;
   ffmpegTimeoutMs: number;
 }
 
@@ -63,6 +66,7 @@ export interface TemplateAssets {
     videoAreaHeight: number;
   };
 }
+
 
 export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<TemplateAssets> {
   const t = args.template;
