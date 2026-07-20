@@ -125,6 +125,87 @@ export function TemplateEditor({
     });
   }
 
+  // -------- Upload direto da arte do cabeçalho --------
+  const [headerUpload, setHeaderUpload] = useState<HeaderUpload | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function validateHeaderFile(file: File): string | null {
+    if (file.size > settings.max_file_size_mb * 1024 * 1024) {
+      return `Arquivo maior que ${settings.max_file_size_mb} MB.`;
+    }
+    if (!HEADER_ART_MIMES.includes(file.type)) {
+      return "Envie PNG, JPG/JPEG ou WebP.";
+    }
+    const safe = sanitizeFileName(file.name);
+    if (!extensionMatchesMime(safe, file.type)) {
+      return "A extensão não corresponde ao tipo do arquivo.";
+    }
+    const totalFiles =
+      (filesQuery.data?.length ?? 0) + (headerUpload && headerUpload.status !== "done" ? 1 : 0);
+    if (totalFiles >= settings.max_files_per_project) {
+      return `Limite de ${settings.max_files_per_project} arquivos atingido.`;
+    }
+    return null;
+  }
+
+  async function startHeaderUpload(file: File) {
+    const err = validateHeaderFile(file);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    const controller = new AbortController();
+    const item: HeaderUpload = {
+      key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      status: "uploading",
+      progress: 5,
+      abort: controller,
+    };
+    setHeaderUpload(item);
+    try {
+      const { file_id } = await uploader({
+        projectId,
+        file,
+        fileType: "template_asset",
+        signal: controller.signal,
+        onProgress: (p) =>
+          setHeaderUpload((prev) =>
+            prev && prev.key === item.key
+              ? { ...prev, status: p.phase as HeaderUpload["status"], progress: p.percent }
+              : prev,
+          ),
+      });
+
+      setHeaderUpload((prev) =>
+        prev && prev.key === item.key ? { ...prev, status: "done", progress: 100 } : prev,
+      );
+
+      // Atualizar listagens e selecionar automaticamente a nova arte.
+      await qc.invalidateQueries({ queryKey: ["project-files", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-rights", projectId] });
+      handleHeaderSelect(file_id);
+      toast.success("Arte do cabeçalho enviada.");
+
+      setTimeout(() => {
+        setHeaderUpload((prev) => (prev && prev.key === item.key ? null : prev));
+      }, 800);
+    } catch (e) {
+      if (controller.signal.aborted) {
+        setHeaderUpload((prev) =>
+          prev && prev.key === item.key ? { ...prev, status: "canceled", progress: 0 } : prev,
+        );
+        return;
+      }
+      const msg = e instanceof Error ? e.message : "Erro no upload";
+      setHeaderUpload((prev) =>
+        prev && prev.key === item.key ? { ...prev, status: "error", error: msg } : prev,
+      );
+      toast.error(msg);
+    }
+  }
+
   const headerRatioPct = Math.round(tpl.header_height_ratio * 100);
   const canSave = Boolean(tpl.header_image_file_id);
 
