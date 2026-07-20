@@ -236,7 +236,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
           if (evt.status === "completed") {
             if (!evt.outputs || evt.outputs.length === 0) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const { error } = await (supabaseAdmin.from("render_jobs") as any)
+              const { error: fjErr } = await (supabaseAdmin.from("render_jobs") as any)
                 .update({
                   status: "failed",
                   error_code: "no_outputs",
@@ -244,33 +244,42 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                   completed_at: new Date().toISOString(),
                 })
                 .eq("id", job.id);
-              if (error) {
-                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail update", error);
+              if (fjErr) {
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail update", fjErr);
               }
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabaseAdmin.from("projects") as any)
+              const { error: fpErr } = await (supabaseAdmin.from("projects") as any)
                 .update({ status: "failed" })
-                .eq("id", job.project_id);
+                .eq("id", job.project_id)
+                .not("status", "in", "(completed,failed)");
+              if (fpErr) {
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail project", fpErr);
+              }
               return new Response("ok", { status: 200 });
             }
 
             // Load expected targets so we can verify Storage BEFORE calling
             // the atomic RPC.
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: targets, error: tErr } = await (supabaseAdmin.from("render_output_targets") as any)
+            const { data: targets, error: tErr } = await (
+              supabaseAdmin.from("render_output_targets") as any
+            )
               .select("worker_output_id, storage_path")
               .eq("render_job_id", job.id);
             if (tErr || !targets) {
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "targets", tErr);
             }
             const targetPathById = new Map<string, string>(
-              (targets as Array<{ worker_output_id: string; storage_path: string }>).map(
-                (t) => [t.worker_output_id, t.storage_path],
-              ),
+              (targets as Array<{ worker_output_id: string; storage_path: string }>).map((t) => [
+                t.worker_output_id,
+                t.storage_path,
+              ]),
             );
 
-            // Verify Storage for every reported output. Transient errors →
-            // 503 with nonce released (worker can retry same eventId).
+            // Verify Storage for every reported output. Transient errors or
+            // genuinely missing uploads both surface as 503 with the nonce
+            // released — the worker keeps 4xx as terminal and drops 409, so
+            // we MUST return 5xx to trigger a retry with a re-upload.
             const enriched: Array<{
               worker_output_id: string;
               file_size: number;
@@ -292,15 +301,14 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                 );
               }
               if (!check.exists) {
-                // Object genuinely absent — worker must re-upload. Free the
-                // nonce so a retry with a fresh eventId isn't blocked.
-                await releaseNonceAnd503(supabaseAdmin, nonceKey, "missing_upload");
-                return new Response("Missing upload", { status: 409 });
+                // Object genuinely absent — release nonce and answer 503
+                // (never 409; the worker discards 409 as terminal).
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "missing_upload");
               }
 
               if (check.size <= 0) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (supabaseAdmin.from("render_jobs") as any)
+                const { error: emjErr } = await (supabaseAdmin.from("render_jobs") as any)
                   .update({
                     status: "failed",
                     error_code: "empty_upload",
@@ -308,10 +316,17 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                     completed_at: new Date().toISOString(),
                   })
                   .eq("id", job.id);
+                if (emjErr) {
+                  return await releaseNonceAnd503(supabaseAdmin, nonceKey, "empty job", emjErr);
+                }
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (supabaseAdmin.from("projects") as any)
+                const { error: empErr } = await (supabaseAdmin.from("projects") as any)
                   .update({ status: "failed" })
-                  .eq("id", job.project_id);
+                  .eq("id", job.project_id)
+                  .not("status", "in", "(completed,failed)");
+                if (empErr) {
+                  return await releaseNonceAnd503(supabaseAdmin, nonceKey, "empty project", empErr);
+                }
                 return new Response("ok", { status: 200 });
               }
               enriched.push({
@@ -321,6 +336,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                 expires_at: out.expiresAt ?? null,
               });
             }
+
 
             // Single atomic RPC: locks job, validates exact set, upserts
             // outputs and finalizes job + project — all in one transaction.
