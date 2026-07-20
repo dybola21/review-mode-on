@@ -4,8 +4,7 @@
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+RUN if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
 
 # ---------- build ----------
 FROM node:22-bookworm-slim AS build
@@ -34,8 +33,7 @@ WORKDIR /app
 
 # Only prod deps
 COPY package.json package-lock.json* ./
-RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev --no-audit --no-fund; fi
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev --no-audit --no-fund; fi
 
 COPY --from=build /app/dist ./dist
 
@@ -50,7 +48,7 @@ ENV PORT=3000 \
     TEMP_DIR=/tmp/editor-worker
 
 EXPOSE 3000
-VOLUME ["/data"]
+
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+ (process.env.PORT||3000) +'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
