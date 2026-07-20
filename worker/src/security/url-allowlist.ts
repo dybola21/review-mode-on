@@ -22,7 +22,11 @@ export function assertAllowedUrl(
   if (u.protocol !== "https:") {
     const localhostOk = !isProduction && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
     if (!localhostOk) {
-      throw new UrlAllowlistError(`insecure_${kind}_url`, "URL não HTTPS não permitida.", u.hostname);
+      throw new UrlAllowlistError(
+        `insecure_${kind}_url`,
+        "URL não HTTPS não permitida.",
+        u.hostname,
+      );
     }
   }
   const host = u.hostname.toLowerCase();
@@ -43,4 +47,3 @@ export class UrlAllowlistError extends Error {
     this.name = "UrlAllowlistError";
   }
 }
-

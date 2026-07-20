@@ -60,7 +60,6 @@ export function registerJobs(
       return reply.code(400).send({ error: "url_not_allowed" });
     }
 
-
     // Enqueue (idempotent).
     const row = db.enqueue(payload, idem);
     return reply.code(202).send({ workerJobId: row.worker_job_id });
