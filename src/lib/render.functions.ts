@@ -11,6 +11,14 @@ import {
   sanitizeBaseName,
   validateRenderInput,
 } from "./render-security";
+import {
+  classifyWorkerHttpFailure,
+  parseWorkerErrorEnvelope,
+  WORKER_INVALID_RESPONSE,
+  WORKER_UNREACHABLE,
+  type WorkerFailure,
+} from "./worker-response";
+
 
 function clientError(msg: string): Error {
   return new Error(msg);
