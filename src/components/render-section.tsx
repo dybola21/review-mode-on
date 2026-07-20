@@ -159,6 +159,10 @@ export function RenderSection({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {diagnostics.data && ACTIVE.has(job.data?.status ?? "") && (
+        <DiagnosticsBlock d={diagnostics.data} />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => submit.mutate()}
