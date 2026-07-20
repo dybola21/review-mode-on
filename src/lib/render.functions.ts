@@ -575,9 +575,11 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
-    // 11) Mark queued — race-safe: only if still 'submitting'. If the
-    //     worker already sent a webhook that advanced us to 'processing'
-    //     or a terminal state, we do NOT regress.
+    // 11) Race-safe status/binding update.
+    //     - Never regress processing / completed / failed / cancelled → queued.
+    //     - If the webhook already bound worker_job_id first (legitimate race),
+    //       respect the existing binding and never overwrite it here.
+    //     - Only update status to 'queued' if the job is still 'submitting'.
     const { error: updErr } = await supabaseAdmin
       .from("render_jobs")
       .update({
@@ -587,17 +589,27 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         started_at: new Date().toISOString(),
       })
       .eq("id", jobId)
-      .eq("status", "submitting");
+      .eq("status", "submitting")
+      .is("worker_job_id", null);
     if (updErr) console.error("[submitRenderJob] update", updErr);
 
-    // Ensure worker_job_id is bound even if state advanced past 'submitting'.
+    // If status advanced past 'submitting' (e.g. webhook set 'processing'
+    // already) but worker_job_id is still null, bind it now — conditionally,
+    // so we NEVER overwrite an already-bound value.
     await supabaseAdmin
       .from("render_jobs")
-      .update({ worker_job_id: workerJobId })
+      .update({ worker_job_id: workerJobId, attempt_count: 1 })
       .eq("id", jobId)
       .is("worker_job_id", null);
 
-    await supabaseAdmin.from("projects").update({ status: "processing" }).eq("id", data.project_id);
+    // Only advance the project to 'processing' if it isn't already
+    // completed/failed by an early webhook. Prevents regression.
+    await supabaseAdmin
+      .from("projects")
+      .update({ status: "processing" })
+      .eq("id", data.project_id)
+      .not("status", "in", "(completed,failed)");
+
 
     return { job_id: jobId };
   });
