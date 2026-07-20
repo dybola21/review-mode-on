@@ -103,4 +103,41 @@ describe("jobPayloadSchema", () => {
     };
     expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
   });
+
+  it("accepts header_image_file_id and header_image_fit", () => {
+    const ok = {
+      ...base,
+      templateSettings: {
+        ...base.templateSettings,
+        header_image_file_id: "55555555-5555-5555-5555-555555555555",
+        header_image_fit: "cover" as const,
+      },
+    };
+    expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
+    const ok2 = {
+      ...base,
+      templateSettings: {
+        ...base.templateSettings,
+        header_image_file_id: "55555555-5555-5555-5555-555555555555",
+        header_image_fit: "contain" as const,
+      },
+    };
+    expect(jobPayloadSchema.safeParse(ok2).success).toBe(true);
+  });
+
+  it("rejects invalid header_image_fit values", () => {
+    const bad = {
+      ...base,
+      templateSettings: { ...base.templateSettings, header_image_fit: "stretch" },
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects non-uuid header_image_file_id", () => {
+    const bad = {
+      ...base,
+      templateSettings: { ...base.templateSettings, header_image_file_id: "not-a-uuid" },
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
 });
