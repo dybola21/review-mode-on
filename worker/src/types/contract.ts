@@ -27,6 +27,11 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "invalid hex color");
 
 export const templateSettingsSchema = z
   .object({
+    // Novo layout: arte pronta no cabeçalho + vídeo abaixo.
+    header_image_file_id: z.string().uuid().nullable().optional(),
+    header_image_fit: z.enum(["cover", "contain"]).default("cover"),
+    // Campos legados — mantidos por compatibilidade, ignorados quando
+    // header_image_file_id existir.
     page_name: z.string().max(80).default(""),
     identifier: z.string().max(60).default(""),
     headline: z.string().max(160).default(""),
@@ -38,7 +43,7 @@ export const templateSettingsSchema = z
       .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
       .default("bottom-right"),
     watermark_opacity: z.number().min(0).max(1).default(0.6),
-    header_height_ratio: z.number().min(0).max(0.4).default(0.12),
+    header_height_ratio: z.number().min(0).max(0.4).default(0.335),
   })
   .strict();
 
