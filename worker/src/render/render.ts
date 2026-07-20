@@ -440,10 +440,7 @@ async function uploadWithRenew(
   let lastErr: unknown = null;
   while (attempt < UPLOAD_MAX_ATTEMPTS) {
     if (cancel.aborted) {
-      throw (
-        lastErr ??
-        new UploadError("output_upload_cancelled", "Upload cancelado.", false)
-      );
+      throw lastErr ?? new UploadError("output_upload_cancelled", "Upload cancelado.", false);
     }
     attempt += 1;
     try {
