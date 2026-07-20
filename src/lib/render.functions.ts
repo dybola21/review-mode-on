@@ -252,6 +252,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
     const callbackUrl = `${baseUrl}/api/public/worker-webhook`;
 
+    logSubmit("validation_started", { projectId: data.project_id });
+
     // 1) Project
     const { data: project, error: projectErr } = await context.supabase
       .from("projects")
