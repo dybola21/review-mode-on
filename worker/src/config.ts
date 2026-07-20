@@ -92,7 +92,6 @@ export const APP_RENEW_INPUT_PATH = "/api/public/worker-renew-input";
 export const APP_RENEW_UPLOAD_PATH = "/api/public/worker-renew-upload";
 export const APP_VERIFY_OUTPUT_PATH = "/api/public/worker-verify-output";
 
-
 export function buildAppUrl(baseUrl: string, path: string): string {
   if (!path.startsWith("/")) {
     throw new Error("app path must start with '/'");
@@ -138,7 +137,6 @@ export type Config = Readonly<z.infer<typeof envSchema>> & {
   readonly APP_RENEW_UPLOAD_URL: string;
   readonly APP_VERIFY_OUTPUT_URL: string;
 };
-
 
 let cached: Config | null = null;
 

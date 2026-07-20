@@ -108,9 +108,10 @@ export class QueueDB {
   // -------------------------------------------------------------------
   enqueue(payload: JobPayload, idempotencyKey: string): QueueRow {
     const existing = this.db
-      .prepare<[string, string], QueueRow>(
-        `SELECT * FROM jobs WHERE app_job_id = ? OR idempotency_key = ? LIMIT 1`,
-      )
+      .prepare<
+        [string, string],
+        QueueRow
+      >(`SELECT * FROM jobs WHERE app_job_id = ? OR idempotency_key = ? LIMIT 1`)
       .get(payload.jobId, idempotencyKey);
     if (existing) return existing;
 
@@ -164,9 +165,10 @@ export class QueueDB {
   claimNextQueued(): QueueRow | undefined {
     const tx = this.db.transaction((): QueueRow | undefined => {
       const row = this.db
-        .prepare<[], QueueRow>(
-          `SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1`,
-        )
+        .prepare<
+          [],
+          QueueRow
+        >(`SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1`)
         .get();
       if (!row) return undefined;
       const now = new Date().toISOString();
@@ -217,6 +219,23 @@ export class QueueDB {
     return res.changes;
   }
 
+  /**
+   * Move a job back to `queued` after a transient recovery failure (e.g. the
+   * app was unreachable while verifying already-uploaded outputs). Preserves
+   * attempt_count and every row in `uploaded_outputs` so the next run only
+   * re-processes what is genuinely missing. Never marks the job as failed
+   * and never emits a failed webhook.
+   */
+  requeueForRecovery(workerJobId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE jobs SET status = 'queued', updated_at = ?
+           WHERE worker_job_id = ? AND status IN ('processing','recovery_pending')`,
+      )
+      .run(now, workerJobId);
+  }
+
   recordUploadedOutput(
     workerJobId: string,
     workerOutputId: string,
@@ -238,9 +257,10 @@ export class QueueDB {
     checksum: string | null;
   }> {
     return this.db
-      .prepare<[string], { worker_output_id: string; file_size: number; checksum: string | null }>(
-        `SELECT worker_output_id, file_size, checksum FROM uploaded_outputs WHERE worker_job_id = ?`,
-      )
+      .prepare<
+        [string],
+        { worker_output_id: string; file_size: number; checksum: string | null }
+      >(`SELECT worker_output_id, file_size, checksum FROM uploaded_outputs WHERE worker_job_id = ?`)
       .all(workerJobId);
   }
 
@@ -255,7 +275,6 @@ export class QueueDB {
       )
       .run(workerJobId, workerOutputId);
   }
-
 
   // -------------------------------------------------------------------
   // Webhook queue

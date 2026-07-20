@@ -130,8 +130,10 @@ export async function runJob(
     // 3) Render outputs, one at a time. Skip outputs already uploaded
     //    in a previous run — but only after confirming remotely that
     //    the object is present and non-empty. Missing/empty marks are
-    //    dropped and the output is reprocessed. Transient verification
-    //    errors are retried with backoff so we never render duplicates.
+    //    dropped and the output is reprocessed. If verification stays
+    //    transient after all retries, the whole job is requeued for a
+    //    later attempt: we NEVER re-render or delete an uploaded mark
+    //    without a confirmed answer from the app.
     const alreadyUploaded = new Set(
       db.listUploadedOutputs(row.worker_job_id).map((o) => o.worker_output_id),
     );
@@ -147,20 +149,24 @@ export async function runJob(
           target.workerOutputId,
           cancel,
         );
-        if (verified.kind === "auth") {
+        const action = decideRecoveryAction(verified);
+        if (action === "abort") {
           throw new RenderError("verify_output_unauthorized", "Verificação de output negada.");
         }
-        if (verified.kind === "ok" && verified.exists && verified.size > 0) {
+        if (action === "defer") {
+          // App unreachable — preserve the uploaded mark and requeue.
+          throw new RecoveryDeferError(target.workerOutputId);
+        }
+        if (action === "skip") {
           stepsDone += 2;
           emitProgress(db, row, stepsDone, totalSteps);
           continue;
         }
-        // Missing, empty, or persistently transient after retries → drop
-        // the local mark and reprocess this specific output.
+        // action === "reprocess": app confirmed the object is missing or
+        // empty. Drop the local mark and re-render this specific output.
         db.deleteUploadedOutput(row.worker_job_id, target.workerOutputId);
         alreadyUploaded.delete(target.workerOutputId);
       }
-
 
       const idx = payload.outputTargets.indexOf(target);
       const perSource = payload.variationCount;
@@ -263,6 +269,16 @@ export async function runJob(
     });
     log.info("job completed");
   } catch (err) {
+    if (err instanceof RecoveryDeferError) {
+      log.warn(
+        { workerOutputId: err.workerOutputId },
+        "recovery verification transient — requeueing job without failing",
+      );
+      db.requeueForRecovery(row.worker_job_id);
+      // Intentionally NO fail() and NO failed webhook — the scheduler
+      // will pick the job up again on the next tick.
+      return;
+    }
     const { code, message } = classifyError(err);
     log.warn({ code }, "job failed");
     fail(db, row, code, message);
@@ -386,20 +402,56 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Verify a remotely-recorded output, retrying transient failures with
- * exponential backoff. If verification stays transient across all
- * attempts, returns `exists: false` so the caller reprocesses the
- * output — the reprocess path is idempotent (upload uses a stable
- * signed target and the RPC upserts), so retrying is safer than
- * skipping a possibly-missing output. Never issues concurrent renders.
+ * Sentinel thrown by the render loop when remote verification stays
+ * transient after every retry. Caught by runJob to requeue the job
+ * WITHOUT marking it failed and WITHOUT emitting a failed webhook.
  */
-async function verifyRemoteOutputWithRetry(
+export class RecoveryDeferError extends Error {
+  readonly code = "recovery_deferred";
+  constructor(readonly workerOutputId: string) {
+    super(`verification transient for output ${workerOutputId}; deferring recovery`);
+  }
+}
+
+export type VerifyRetryResult =
+  | { kind: "ok"; exists: boolean; size: number }
+  | { kind: "auth" }
+  | { kind: "transient" };
+
+/**
+ * Decide what to do with a locally-uploaded output based on remote
+ * verification. Pure function — safe to unit-test.
+ *
+ *   - "skip"      → app confirmed the object exists and has bytes.
+ *   - "reprocess" → app confirmed the object is missing or empty.
+ *   - "abort"     → auth failure (workerJobId mismatch, HMAC, etc.).
+ *   - "defer"     → verification stayed transient; the job must be
+ *                   requeued WITHOUT touching uploaded_outputs.
+ */
+export function decideRecoveryAction(
+  v: VerifyRetryResult,
+): "skip" | "reprocess" | "abort" | "defer" {
+  if (v.kind === "auth") return "abort";
+  if (v.kind === "transient") return "defer";
+  if (v.exists && v.size > 0) return "skip";
+  return "reprocess";
+}
+
+/**
+ * Verify a remotely-recorded output, retrying transient failures with
+ * exponential backoff. If verification stays transient across every
+ * attempt, returns `{ kind: "transient" }` — the caller MUST NOT
+ * delete the local uploaded mark and MUST NOT re-render. Only a
+ * confirmed `exists=false` or `size=0` from the app authorises
+ * dropping the mark and reprocessing.
+ */
+export async function verifyRemoteOutputWithRetry(
   cfg: Config,
   jobId: string,
   workerJobId: string,
   workerOutputId: string,
   cancel: AbortSignal,
-): Promise<{ kind: "ok"; exists: boolean; size: number } | { kind: "auth" }> {
+): Promise<VerifyRetryResult> {
   const delays = [0, 500, 1500, 4000];
   for (let i = 0; i < delays.length; i += 1) {
     cancel.throwIfAborted();
@@ -410,9 +462,8 @@ async function verifyRemoteOutputWithRetry(
     if (r.kind === "auth") return r;
     // transient → retry
   }
-  return { kind: "ok", exists: false, size: 0 };
+  return { kind: "transient" };
 }
 
 // Path is used indirectly through ensureInsideDir; explicit import kept for clarity.
 void path;
-
