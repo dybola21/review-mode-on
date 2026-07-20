@@ -365,10 +365,10 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
             error_code?: string;
             error_message?: string;
           } = { status: evt.status };
-          if (evt.status === "completed") patch.progress = 100;
-          else if (evt.status === "processing" && evt.progress !== undefined) {
+          if (evt.status === "processing" && evt.progress !== undefined) {
             patch.progress = Math.min(99, Math.max(1, evt.progress));
           } else if (evt.status === "queued") patch.progress = 0;
+
           if (evt.status === "failed" || evt.status === "cancelled") {
             patch.completed_at = new Date().toISOString();
             patch.error_code = sanitize(evt.errorCode, 120) ?? "worker_error";
