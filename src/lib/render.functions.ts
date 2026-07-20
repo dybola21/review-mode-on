@@ -446,12 +446,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       mimeType: string;
       signedUrl: string;
     };
-    const ALLOWED_INPUT_TYPES = new Set(["source_video", "logo", "template_asset"]);
-    const BUCKET_BY_TYPE: Record<string, string> = {
-      source_video: "project-inputs",
-      logo: "project-assets",
-      template_asset: "project-assets",
-    };
+    // Bucket comes from the shared server-canonical map, not from a
+    // client-supplied hint. Validation ran in step 5b already.
+
     let signedInputs: SignedInput[];
     try {
       const allInputs = [...files, ...assetFiles];
