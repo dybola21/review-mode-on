@@ -28,7 +28,8 @@ const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "invalid hex color");
 
 export const templateSettingsSchema = z
   .object({
-    header_image_file_id: z.string().uuid().nullable().optional(),
+    // v2: required. The header art is a mandatory template_asset input.
+    header_image_file_id: z.string().uuid(),
     header_image_fit: z.enum(["cover", "contain"]).default("cover"),
     // Legacy — accepted for backward compat, ignored when header art is set.
     page_name: z.string().max(80).default(""),
@@ -85,6 +86,19 @@ export const jobPayloadSchema = z
         code: z.ZodIssueCode.custom,
         message: "outputTargets.length must equal number of source_video inputs",
         path: ["outputTargets"],
+      });
+    }
+    // v2: header_image_file_id is required and must reference exactly one
+    // template_asset input.
+    const headerId = p.templateSettings.header_image_file_id;
+    const headerMatches = p.inputFiles.filter(
+      (f) => f.fileType === "template_asset" && f.fileId === headerId,
+    );
+    if (headerMatches.length !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "exactly one template_asset input matching header_image_file_id is required",
+        path: ["templateSettings", "header_image_file_id"],
       });
     }
     const seenSources = new Set<string>();
