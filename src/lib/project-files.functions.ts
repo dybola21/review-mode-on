@@ -130,6 +130,14 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Opportunistic cleanup: expira pendências vencidas antes de reservar nova.
+    await supabaseAdmin.rpc("expire_pending_project_files").catch((e: unknown) => {
+      console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
+    });
+
+    const UPLOAD_TTL_SECONDS = 60 * 15;
+    const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
+
     // Cria linha pendente com metadata canônica derivada no servidor.
     const { error: insErr } = await supabaseAdmin.from("project_files").insert({
       id: fileId,
@@ -141,6 +149,7 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       mime_type: data.mime_type,
       file_size: data.file_size,
       status: "pending",
+      upload_expires_at: uploadExpiresAt,
     });
     if (insErr) {
       console.error("[prepareProjectFileUpload] insert pending", insErr);
@@ -164,8 +173,10 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       safe_file_name: safeName,
       signed_url: signed.signedUrl,
       token: signed.token,
+      upload_expires_at: uploadExpiresAt,
     };
   });
+
 
 // ----- confirmar upload: valida objeto e transiciona pending → uploaded -----
 const confirmSchema = z.object({
