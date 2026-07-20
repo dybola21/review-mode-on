@@ -339,9 +339,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       const reason = validateRenderInput(
         {
           id: f.id,
-          user_id: context.userId,
-          project_id: data.project_id,
-          status: (f as { status?: string }).status ?? "uploaded",
+          user_id: f.user_id,
+          project_id: f.project_id,
+          status: f.status,
           file_type: f.file_type,
           mime_type: f.mime_type,
           storage_path: f.storage_path,
@@ -354,6 +354,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         throw clientError("Um dos arquivos do projeto está inválido para renderização.");
       }
     }
+
 
     // 6) Create job
 
