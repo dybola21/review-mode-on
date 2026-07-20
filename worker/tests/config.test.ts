@@ -6,8 +6,10 @@ import {
   APP_WEBHOOK_PATH,
   APP_RENEW_INPUT_PATH,
   APP_RENEW_UPLOAD_PATH,
+  APP_VERIFY_OUTPUT_PATH,
   _resetConfigForTests,
 } from "../src/config.js";
+
 
 const SECRET = "x".repeat(32);
 const baseEnv = (over: Record<string, string | undefined>) =>
