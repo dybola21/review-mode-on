@@ -694,7 +694,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       callbackUrl,
       inputFiles: signedInputs,
       outputTargets,
-      templateSettings: project.template_settings,
+      templateSettings,
       uploadTtlSeconds: SIGNED_UPLOAD_TTL_SECONDS,
     };
 
