@@ -304,8 +304,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Já existe um processamento em andamento.");
     }
 
-    // 5) Compute expected outputs
-    // variationCount MUST equal variationSettings.variation_count (worker contract enforces).
+    // 5) Compute expected outputs (raw product — HARD_MAX enforced BEFORE
+    //    any write: no job, no targets, no signed URLs when 401+.).
     const variationFromSettings = Number(
       (project.variation_settings as { variation_count?: unknown } | null)?.variation_count,
     );
@@ -315,15 +315,42 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         ? Math.floor(variationFromSettings)
         : Number(project.variation_count) || 1,
     );
-    const totalOutputs = computeMaxOutputs(files.length, variationCount, HARD_MAX_OUTPUTS);
+    const totalOutputs = computeMaxOutputs(files.length, variationCount);
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
     if (totalOutputs > HARD_MAX_OUTPUTS) {
-      throw clientError("Combinação de arquivos e variações excede o limite permitido.");
+      throw clientError(
+        `Combinação de arquivos e variações excede o limite de ${HARD_MAX_OUTPUTS} saídas.`,
+      );
+    }
+
+    // 5b) Validate every input file BEFORE we write anything. This closes
+    //     the pre-write door: no job, no targets, no signed URLs unless
+    //     every input passes the render invariants.
+    const allInputsForValidation = [...files, ...assetFiles];
+    for (const f of allInputsForValidation) {
+      const reason = validateRenderInput(
+        {
+          id: f.id,
+          user_id: context.userId,
+          project_id: data.project_id,
+          status: (f as { status?: string }).status ?? "uploaded",
+          file_type: f.file_type,
+          mime_type: f.mime_type,
+          storage_path: f.storage_path,
+        },
+        context.userId,
+        data.project_id,
+      );
+      if (reason) {
+        console.error("[submitRenderJob] input invalid", { id: f.id, reason });
+        throw clientError("Um dos arquivos do projeto está inválido para renderização.");
+      }
     }
 
     // 6) Create job
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let jobId: string;
