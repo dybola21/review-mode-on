@@ -424,8 +424,18 @@ export function TemplateEditor({
                   </span>
                 </label>
               </div>
+              {tpl.header_image_fit === "cover" && tpl.header_image_file_id && (
+                <button
+                  type="button"
+                  onClick={centerHeaderImage}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Centralizar
+                </button>
+              )}
             </Field>
           </div>
+
 
           <div className="rounded-md border border-border p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
