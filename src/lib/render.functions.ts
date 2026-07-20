@@ -583,10 +583,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
 
     // 11) Race-safe status/binding update.
-    //     - Never regress processing / completed / failed / cancelled → queued.
-    //     - If the webhook already bound worker_job_id first (legitimate race),
-    //       respect the existing binding and never overwrite it here.
-    //     - Only update status to 'queued' if the job is still 'submitting'.
+    //     - Never regress processing/completed/failed/cancelled → queued.
+    //     - Try to bind worker_job_id conditionally (only when null) and
+    //       advance status → queued only when still 'submitting'.
     const { error: updErr } = await supabaseAdmin
       .from("render_jobs")
       .update({
@@ -600,14 +599,43 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       .is("worker_job_id", null);
     if (updErr) console.error("[submitRenderJob] update", updErr);
 
-    // If status advanced past 'submitting' (e.g. webhook set 'processing'
-    // already) but worker_job_id is still null, bind it now — conditionally,
-    // so we NEVER overwrite an already-bound value.
-    await supabaseAdmin
+    // Conditional bind if status advanced past 'submitting' but no binding
+    // was set yet.
+    const { error: bindErr } = await supabaseAdmin
       .from("render_jobs")
       .update({ worker_job_id: workerJobId, attempt_count: 1 })
       .eq("id", jobId)
       .is("worker_job_id", null);
+    if (bindErr) console.error("[submitRenderJob] bind", bindErr);
+
+    // Re-read authoritative binding. If a webhook won the race and bound
+    // a DIFFERENT worker_job_id, DO NOT overwrite: mark as conflict, log,
+    // and fail the caller so no signed URL for a foreign worker leaks.
+    const { data: reread, error: rrErr } = await supabaseAdmin
+      .from("render_jobs")
+      .select("worker_job_id, status")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (rrErr || !reread) {
+      console.error("[submitRenderJob] reread", rrErr);
+      throw clientError("Não foi possível confirmar o processamento.");
+    }
+    if (reread.worker_job_id === null) {
+      // Extremely unlikely (both updates failed). Treat as transient.
+      throw clientError("Não foi possível confirmar o processamento.");
+    }
+    if (reread.worker_job_id !== workerJobId) {
+      console.error("[submitRenderJob] worker_job_id conflict", {
+        jobId,
+        expected: workerJobId,
+        bound: reread.worker_job_id,
+      });
+      // Do NOT overwrite. Do NOT silently return success. Let the caller
+      // know so the UI stops assuming this POST /jobs response was accepted.
+      throw clientError("Conflito ao vincular o processamento. Tente novamente.");
+    }
+
+
 
     // Only advance the project to 'processing' if it isn't already
     // completed/failed by an early webhook. Prevents regression.
