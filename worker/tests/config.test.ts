@@ -6,8 +6,10 @@ import {
   APP_WEBHOOK_PATH,
   APP_RENEW_INPUT_PATH,
   APP_RENEW_UPLOAD_PATH,
+  APP_VERIFY_OUTPUT_PATH,
   _resetConfigForTests,
 } from "../src/config.js";
+
 
 const SECRET = "x".repeat(32);
 const baseEnv = (over: Record<string, string | undefined>) =>
@@ -69,12 +71,14 @@ describe("buildAppUrl", () => {
 });
 
 describe("loadConfig", () => {
-  it("derives all three endpoint URLs", () => {
+  it("derives all four endpoint URLs", () => {
     const cfg = loadConfig(baseEnv({}));
     expect(cfg.APP_WEBHOOK_URL).toBe(`https://app.example.com${APP_WEBHOOK_PATH}`);
     expect(cfg.APP_RENEW_INPUT_URL).toBe(`https://app.example.com${APP_RENEW_INPUT_PATH}`);
     expect(cfg.APP_RENEW_UPLOAD_URL).toBe(`https://app.example.com${APP_RENEW_UPLOAD_PATH}`);
+    expect(cfg.APP_VERIFY_OUTPUT_URL).toBe(`https://app.example.com${APP_VERIFY_OUTPUT_PATH}`);
   });
+
   it("strips trailing slash from APP_BASE_URL before building endpoints", () => {
     const cfg = loadConfig(baseEnv({ APP_BASE_URL: "https://app.example.com/" }));
     expect(cfg.APP_WEBHOOK_URL).toBe("https://app.example.com/api/public/worker-webhook");

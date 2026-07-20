@@ -56,6 +56,23 @@ function getPublicBaseUrl(): string | null {
 // -----------------------------------------------------------------------
 // Health check
 // -----------------------------------------------------------------------
+
+/**
+ * Pure predicate: a health body is only "available" when every field is
+ * present and correct. Used by the server-fn below AND unit tests.
+ * Requires:
+ *   - status === "ok"
+ *   - ffmpeg === true
+ *   - queue === "ready"
+ *   - version is a non-empty string
+ */
+export function isHealthyBody(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const b = body as Record<string, unknown>;
+  const versionOk = typeof b.version === "string" && b.version.trim().length > 0;
+  return b.status === "ok" && b.ffmpeg === true && b.queue === "ready" && versionOk;
+}
+
 export const checkWorkerHealth = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
@@ -85,7 +102,7 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
         signal: ctrl.signal,
       });
       clearTimeout(timer);
-      if (!res.ok) {
+      if (res.status !== 200) {
         return {
           configured: true,
           available: false,
@@ -99,16 +116,12 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
       } catch {
         body = null;
       }
-      const parsed = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
-      const statusOk = parsed?.status === "ok";
-      const ffmpegOk = parsed?.ffmpeg === true;
-      const queueOk = parsed?.queue === "ready";
-      const ok = statusOk && ffmpegOk && queueOk;
+      const ok = isHealthyBody(body);
       return {
         configured: true,
         available: ok,
         checkedAt: new Date().toISOString(),
-        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg ou fila).",
+        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg, fila ou versão).",
       };
     } catch (err) {
       clearTimeout(timer);

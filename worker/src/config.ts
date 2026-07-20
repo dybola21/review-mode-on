@@ -90,6 +90,8 @@ export function normaliseAppBaseUrl(raw: string, isProduction: boolean): string 
 export const APP_WEBHOOK_PATH = "/api/public/worker-webhook";
 export const APP_RENEW_INPUT_PATH = "/api/public/worker-renew-input";
 export const APP_RENEW_UPLOAD_PATH = "/api/public/worker-renew-upload";
+export const APP_VERIFY_OUTPUT_PATH = "/api/public/worker-verify-output";
+
 
 export function buildAppUrl(baseUrl: string, path: string): string {
   if (!path.startsWith("/")) {
@@ -134,7 +136,9 @@ export type Config = Readonly<z.infer<typeof envSchema>> & {
   readonly APP_WEBHOOK_URL: string;
   readonly APP_RENEW_INPUT_URL: string;
   readonly APP_RENEW_UPLOAD_URL: string;
+  readonly APP_VERIFY_OUTPUT_URL: string;
 };
+
 
 let cached: Config | null = null;
 
@@ -173,9 +177,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     APP_WEBHOOK_URL: buildAppUrl(baseUrl, APP_WEBHOOK_PATH),
     APP_RENEW_INPUT_URL: buildAppUrl(baseUrl, APP_RENEW_INPUT_PATH),
     APP_RENEW_UPLOAD_URL: buildAppUrl(baseUrl, APP_RENEW_UPLOAD_PATH),
+    APP_VERIFY_OUTPUT_URL: buildAppUrl(baseUrl, APP_VERIFY_OUTPUT_PATH),
     version: process.env.WORKER_VERSION ?? "0.1.0",
     isProduction,
   }) as Config;
+
   return cached;
 }
 

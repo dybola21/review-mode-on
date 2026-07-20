@@ -20,6 +20,8 @@ import { buildTemplateOverlay, assertTemplateSafe } from "./template.js";
 import { renderOutput, RenderError } from "./ffmpeg.js";
 import { computeVariationParams, computeWatermarkOffset } from "./variation.js";
 import { renewInputUrl, renewUploadUrl } from "../webhook/renew.js";
+import { verifyRemoteOutput } from "../webhook/verify.js";
+
 import { enqueueWebhook } from "../webhook/sender.js";
 import type { Config } from "../config.js";
 import { pinoLogger } from "../logger.js";
@@ -126,7 +128,10 @@ export async function runJob(
     const jitterBudget = Math.round(OUT_W * 0.04);
 
     // 3) Render outputs, one at a time. Skip outputs already uploaded
-    //    in a previous run (worker restart recovery).
+    //    in a previous run — but only after confirming remotely that
+    //    the object is present and non-empty. Missing/empty marks are
+    //    dropped and the output is reprocessed. Transient verification
+    //    errors are retried with backoff so we never render duplicates.
     const alreadyUploaded = new Set(
       db.listUploadedOutputs(row.worker_job_id).map((o) => o.worker_output_id),
     );
@@ -135,10 +140,27 @@ export async function runJob(
       heartbeat.check();
 
       if (alreadyUploaded.has(target.workerOutputId)) {
-        stepsDone += 2;
-        emitProgress(db, row, stepsDone, totalSteps);
-        continue;
+        const verified = await verifyRemoteOutputWithRetry(
+          cfg,
+          payload.jobId,
+          row.worker_job_id,
+          target.workerOutputId,
+          cancel,
+        );
+        if (verified.kind === "auth") {
+          throw new RenderError("verify_output_unauthorized", "Verificação de output negada.");
+        }
+        if (verified.kind === "ok" && verified.exists && verified.size > 0) {
+          stepsDone += 2;
+          emitProgress(db, row, stepsDone, totalSteps);
+          continue;
+        }
+        // Missing, empty, or persistently transient after retries → drop
+        // the local mark and reprocess this specific output.
+        db.deleteUploadedOutput(row.worker_job_id, target.workerOutputId);
+        alreadyUploaded.delete(target.workerOutputId);
       }
+
 
       const idx = payload.outputTargets.indexOf(target);
       const perSource = payload.variationCount;
@@ -363,5 +385,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Verify a remotely-recorded output, retrying transient failures with
+ * exponential backoff. If verification stays transient across all
+ * attempts, returns `exists: false` so the caller reprocesses the
+ * output — the reprocess path is idempotent (upload uses a stable
+ * signed target and the RPC upserts), so retrying is safer than
+ * skipping a possibly-missing output. Never issues concurrent renders.
+ */
+async function verifyRemoteOutputWithRetry(
+  cfg: Config,
+  jobId: string,
+  workerJobId: string,
+  workerOutputId: string,
+  cancel: AbortSignal,
+): Promise<{ kind: "ok"; exists: boolean; size: number } | { kind: "auth" }> {
+  const delays = [0, 500, 1500, 4000];
+  for (let i = 0; i < delays.length; i += 1) {
+    cancel.throwIfAborted();
+    const d = delays[i] ?? 0;
+    if (d > 0) await sleep(d);
+    const r = await verifyRemoteOutput(cfg, jobId, workerJobId, workerOutputId);
+    if (r.kind === "ok") return r;
+    if (r.kind === "auth") return r;
+    // transient → retry
+  }
+  return { kind: "ok", exists: false, size: 0 };
+}
+
 // Path is used indirectly through ensureInsideDir; explicit import kept for clarity.
 void path;
+

@@ -244,6 +244,19 @@ export class QueueDB {
       .all(workerJobId);
   }
 
+  /** Remove a local "uploaded" mark for a single output so it will be
+   *  re-rendered on the next iteration. Used by restart recovery when a
+   *  remote verification shows the object is missing or empty. */
+  deleteUploadedOutput(workerJobId: string, workerOutputId: string): void {
+    this.db
+      .prepare(
+        `DELETE FROM uploaded_outputs
+           WHERE worker_job_id = ? AND worker_output_id = ?`,
+      )
+      .run(workerJobId, workerOutputId);
+  }
+
+
   // -------------------------------------------------------------------
   // Webhook queue
   // -------------------------------------------------------------------
