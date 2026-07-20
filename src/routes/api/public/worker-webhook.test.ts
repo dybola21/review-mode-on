@@ -153,9 +153,9 @@ async function invokeWith(adminMock: unknown): Promise<(req: Request) => Promise
   mock.module("@/integrations/supabase/client.server", () => ({ supabaseAdmin: adminMock }));
   const mod = await import("./worker-webhook");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (mod as any).Route.options.server.handlers.POST as (
-    args: { request: Request },
-  ) => Promise<Response> extends (a: infer A) => infer R
+  return (mod as any).Route.options.server.handlers.POST as (args: {
+    request: Request;
+  }) => Promise<Response> extends (a: infer A) => infer R
     ? (req: Request) => Promise<Response>
     : never;
 }
@@ -214,7 +214,10 @@ describe("worker-webhook auth", () => {
 
 describe("worker-webhook completed path", () => {
   it("returns 503 (not 409) when the upload is genuinely missing", async () => {
-    const res = await invoke(buildAdmin({ storageExists: false }), buildRequest(completedPayload()));
+    const res = await invoke(
+      buildAdmin({ storageExists: false }),
+      buildRequest(completedPayload()),
+    );
     expect(res.status).toBe(503);
   });
 
