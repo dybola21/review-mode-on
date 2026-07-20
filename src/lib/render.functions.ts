@@ -416,8 +416,13 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         .single();
       if (createErr || !created) throw new Error("insert failed");
       jobId = created.id;
+      logSubmit("job_created", { projectId: data.project_id, jobId });
     } catch (err) {
       console.error("[submitRenderJob] insert", err);
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        code: "job_insert_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
