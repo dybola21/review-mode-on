@@ -298,5 +298,89 @@ describe("worker-webhook completed path", () => {
   });
 });
 
+describe("worker-webhook timestamp contract", () => {
+  function processingPayload(): Record<string, unknown> {
+    return {
+      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventType: "status_update",
+      timestamp: NOW,
+      jobId: JOB_ID,
+      workerJobId: WORKER_JOB_ID,
+      status: "processing",
+      progress: 10,
+    };
+  }
+
+  it("accepts numeric epoch seconds (worker sender contract)", async () => {
+    // Mirrors the exact body shape produced by worker/src/webhook/sender.ts
+    const body = {
+      eventId: "evt-1",
+      eventType: "status_update",
+      timestamp: NOW,
+      jobId: JOB_ID,
+      workerJobId: WORKER_JOB_ID,
+      status: "processing",
+      progress: 5,
+    };
+    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(body));
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects string timestamp with 400", async () => {
+    const p = processingPayload();
+    p.timestamp = String(NOW);
+    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(p));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects ISO-8601 timestamp with 400", async () => {
+    const p = processingPayload();
+    p.timestamp = new Date(NOW * 1000).toISOString();
+    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(p));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects milliseconds timestamp with 400", async () => {
+    const p = processingPayload();
+    p.timestamp = NOW * 1000;
+    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(p));
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects body timestamp that differs from header with 401", async () => {
+    // Signed header uses NOW; body carries NOW-1 → mismatch.
+    const raw = JSON.stringify({ ...processingPayload(), timestamp: NOW - 1 });
+    const ts = String(NOW);
+    const sig = computeSignature(SECRET, ts, raw);
+    const req = new Request("http://x/api/public/worker-webhook", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-worker-signature": sig,
+        "x-worker-timestamp": ts,
+      },
+      body: raw,
+    });
+    const res = await invoke(buildAdmin({ storageExists: true }), req);
+    expect(res.status).toBe(401);
+  });
+
+  it("processing transitions queued → processing (200)", async () => {
+    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(processingPayload()));
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts completed after processing (200)", async () => {
+    const admin = buildAdmin({ storageExists: true });
+    // First: processing
+    const r1 = await invoke(admin, buildRequest(processingPayload()));
+    expect(r1.status).toBe(200);
+    // Then: completed on the same job (fresh admin — jobRow default is queued,
+    // and "queued → completed" is a legal transition per ALLOWED_TRANSITIONS).
+    const r2 = await invoke(admin, buildRequest(completedPayload()));
+    expect(r2.status).toBe(200);
+  });
+});
+
 // keep unused declaration referenced to satisfy tsgo when tree-shaking
 void invokeWith;
