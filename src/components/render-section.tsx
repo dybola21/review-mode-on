@@ -30,6 +30,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
   const jobFn = useServerFn(getLatestRenderJob);
   const submitFn = useServerFn(submitRenderJob);
   const filesFn = useServerFn(listProjectFiles);
+  const diagFn = useServerFn(getRenderJobDiagnostics);
 
   const health = useQuery({
     queryKey: ["worker-health"],
@@ -49,6 +50,16 @@ export function RenderSection({ projectId }: { projectId: string }) {
     refetchInterval: (q) => {
       const s = q.state.data?.status;
       return s && ACTIVE.has(s) ? 4000 : false;
+    },
+  });
+
+  const diagnostics = useQuery({
+    queryKey: ["render-diagnostics", projectId],
+    queryFn: () => diagFn({ data: { project_id: projectId } }),
+    enabled: !!job.data && ACTIVE.has(job.data.status),
+    refetchInterval: (q) => {
+      const s = job.data?.status;
+      return s && ACTIVE.has(s) ? 4000 : (q.state.data ? false : false);
     },
   });
 
