@@ -193,6 +193,11 @@ export function RenderSection({
             ? "Tentar novamente"
             : "Processar todos os vídeos"}
         </button>
+        {!hasHeaderArt && (
+          <span className="text-xs text-amber-500">
+            Selecione e salve uma arte de cabeçalho.
+          </span>
+        )}
         {!health.data?.configured && (
           <span className="text-xs text-muted-foreground">
             Configure o servidor de processamento para habilitar.
