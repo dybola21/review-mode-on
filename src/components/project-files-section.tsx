@@ -60,9 +60,8 @@ export function ProjectFilesSection({
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listProjectFiles);
-  const prepareFn = useServerFn(prepareProjectFileUpload);
-  const confirmFn = useServerFn(confirmProjectFile);
   const deleteFn = useServerFn(deleteProjectFile);
+  const uploader = useProjectFileUploader();
 
   const filesQuery = useQuery({
     queryKey: ["project-files", projectId],
@@ -91,36 +90,12 @@ export function ProjectFilesSection({
       abort: controller,
     });
     try {
-      const prepared = await prepareFn({
-        data: {
-          project_id: projectId,
-          file_name: item.file.name,
-          mime_type: item.file.type,
-          file_size: item.file.size,
-          file_type: item.file_type,
-        },
-      });
-
-      updateItem(item.key, { progress: 15 });
-
-      // Upload via signed URL usando fetch (com progresso aproximado via XHR)
-      const uploaded = await xhrUpload({
-        url: prepared.signed_url,
+      await uploader({
+        projectId,
         file: item.file,
+        fileType: item.file_type,
         signal: controller.signal,
-        onProgress: (p) =>
-          updateItem(item.key, {
-            progress: 15 + Math.floor(p * 0.75),
-          }),
-      });
-      if (!uploaded) throw new Error("Upload cancelado.");
-
-      updateItem(item.key, { status: "confirming", progress: 92 });
-
-      await confirmFn({
-        data: {
-          file_id: prepared.file_id,
-        },
+        onProgress: (p) => updateItem(item.key, { status: p.phase, progress: p.percent }),
       });
 
       updateItem(item.key, { status: "done", progress: 100 });
