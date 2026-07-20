@@ -590,8 +590,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     } catch (err) {
       console.error("[submitRenderJob] sign uploads", err);
       await failJob("sign_upload_failed", "Falha ao preparar destinos.");
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "sign_upload_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
+
+    logSubmit("signed_urls_created", { projectId: data.project_id, jobId });
 
     // 10) Send job to worker. templateSettings references assets by
     //     fileId only — never storagePath or signed URL.
