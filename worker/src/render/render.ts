@@ -113,6 +113,19 @@ export async function runJob(
       logoPath = logoEntry.path;
     }
 
+    // Header art (novo layout): imagem obrigatória do projeto no topo do frame.
+    let headerImagePath: string | null = null;
+    if (template.header_image_file_id) {
+      const headerEntry = localById.get(template.header_image_file_id);
+      if (!headerEntry) {
+        throw new RenderError("header_image_invalid", "Arte do cabeçalho não foi enviada.");
+      }
+      if (!headerEntry.input.mimeType.startsWith("image/")) {
+        throw new RenderError("header_image_invalid", "Arte do cabeçalho não é uma imagem.");
+      }
+      headerImagePath = headerEntry.path;
+    }
+
     // 2) Build template overlay once per job (header + optional watermark PNG).
     const overlay = await buildTemplateOverlay({
       width: OUT_W,
@@ -121,6 +134,7 @@ export async function runJob(
       outDir: assetsDir,
       jobId: row.worker_job_id,
       logoPath,
+      headerImagePath,
       ffmpegTimeoutMs: 60_000,
     });
 
