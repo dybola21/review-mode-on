@@ -410,17 +410,24 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
           if (evt.status === "failed" || evt.status === "cancelled") {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabaseAdmin.from("projects") as any)
+            const { error: pfErr } = await (supabaseAdmin.from("projects") as any)
               .update({ status: "failed" })
               .eq("id", job.project_id)
               .not("status", "in", "(completed,failed)");
+            if (pfErr) {
+              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "project fail", pfErr);
+            }
           } else if (evt.status === "processing") {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabaseAdmin.from("projects") as any)
+            const { error: ppErr } = await (supabaseAdmin.from("projects") as any)
               .update({ status: "processing" })
               .eq("id", job.project_id)
               .not("status", "in", "(completed,failed)");
+            if (ppErr) {
+              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "project processing", ppErr);
+            }
           }
+
 
           return new Response("ok", { status: 200 });
         } catch (err) {
