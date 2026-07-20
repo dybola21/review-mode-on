@@ -19,7 +19,6 @@ import {
   type WorkerFailure,
 } from "./worker-response";
 
-
 function clientError(msg: string): Error {
   return new Error(msg);
 }
@@ -675,7 +674,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       });
       throw clientError("Não foi possível iniciar o processamento.");
     }
-
 
     // 11) Race-safe status/binding update.
     //     - Never regress processing/completed/failed/cancelled → queued.
