@@ -485,9 +485,15 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         })),
       );
       if (tErr) throw new Error(`targets insert: ${tErr.message}`);
+      logSubmit("targets_created", { projectId: data.project_id, jobId });
     } catch (err) {
       console.error("[submitRenderJob] targets", err);
       await failJob("targets_failed", "Falha ao preparar destinos.");
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "targets_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
