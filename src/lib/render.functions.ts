@@ -269,7 +269,6 @@ export const getRenderJobDiagnostics = createServerFn({ method: "POST" })
     }
   });
 
-
 // -----------------------------------------------------------------------
 // Signed download URL for a single output
 // -----------------------------------------------------------------------

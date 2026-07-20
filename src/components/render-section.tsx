@@ -60,7 +60,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
     enabled: !!job.data && ACTIVE.has(job.data.status),
     refetchInterval: (q) => {
       const s = job.data?.status;
-      return s && ACTIVE.has(s) ? 4000 : (q.state.data ? false : false);
+      return s && ACTIVE.has(s) ? 4000 : q.state.data ? false : false;
     },
   });
 
@@ -230,12 +230,8 @@ function DiagnosticsBlock({ d }: { d: NonNullable<RenderJobDiagnostics> }) {
         <span className="text-muted-foreground">tentativa {d.attemptCount}</span>
       </div>
       <p className="mt-1 text-sm text-foreground">{detail}</p>
-      {stale && (
-        <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>
-      )}
-      {d.lastErrorCode && (
-        <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>
-      )}
+      {stale && <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>}
+      {d.lastErrorCode && <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>}
     </div>
   );
 }
