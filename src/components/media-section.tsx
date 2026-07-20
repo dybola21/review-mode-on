@@ -1,15 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Image as ImageIcon,
-  Loader2,
-  RefreshCw,
-  Trash2,
-  Upload,
-  Video,
-  X,
-} from "lucide-react";
+import { Image as ImageIcon, Loader2, RefreshCw, Trash2, Upload, Video, X } from "lucide-react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
 import type { getAppSettings } from "@/lib/app-settings.functions";
@@ -388,10 +380,7 @@ function HeaderTab(props: {
       qc.invalidateQueries({ queryKey: ["project-rights", projectId] });
       onSelect(file_id);
       toast.success("Arte enviada.");
-      setTimeout(
-        () => setItem((prev) => (prev && prev.key === it.key ? null : prev)),
-        800,
-      );
+      setTimeout(() => setItem((prev) => (prev && prev.key === it.key ? null : prev)), 800);
     } catch (e) {
       if (controller.signal.aborted) {
         setItem((prev) =>
@@ -400,7 +389,9 @@ function HeaderTab(props: {
         return;
       }
       const msg = e instanceof Error ? e.message : "Erro no upload";
-      setItem((prev) => (prev && prev.key === it.key ? { ...prev, status: "error", error: msg } : prev));
+      setItem((prev) =>
+        prev && prev.key === it.key ? { ...prev, status: "error", error: msg } : prev,
+      );
       toast.error(msg);
     }
   }
@@ -504,7 +495,9 @@ function HeaderTab(props: {
               />
               <span>
                 <strong>Mostrar inteira</strong>
-                <span className="block text-[10px] text-muted-foreground">Fundo preto se sobrar</span>
+                <span className="block text-[10px] text-muted-foreground">
+                  Fundo preto se sobrar
+                </span>
               </span>
             </label>
           </div>
@@ -589,9 +582,7 @@ function HeaderTab(props: {
 
       <div className="flex items-center justify-between">
         {!canSave && (
-          <p className="text-xs text-amber-600">
-            Selecione a arte do cabeçalho antes de salvar.
-          </p>
+          <p className="text-xs text-amber-600">Selecione a arte do cabeçalho antes de salvar.</p>
         )}
         <button
           onClick={onSave}
@@ -623,8 +614,17 @@ function VideosTab(props: {
   onDelete: (id: string) => void;
   deleting: boolean;
 }) {
-  const { projectId, settings, filesCount, videos, loading, selectedId, onSelect, onDelete, deleting } =
-    props;
+  const {
+    projectId,
+    settings,
+    filesCount,
+    videos,
+    loading,
+    selectedId,
+    onSelect,
+    onDelete,
+    deleting,
+  } = props;
 
   const uploader = useProjectFileUploader();
   const qc = useQueryClient();
