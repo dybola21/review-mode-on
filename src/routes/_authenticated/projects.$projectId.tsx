@@ -181,12 +181,6 @@ function EditProjectPage() {
             initialTemplate={project.template_settings}
             settings={settingsQuery.data}
           />
-          <VariationsEditor
-            projectId={projectId}
-            initial={project.variation_settings}
-            currentCount={project.variation_count ?? 1}
-            maxVariations={settingsQuery.data.max_variations}
-          />
           <RightsSection projectId={projectId} />
           <RenderSection projectId={projectId} />
         </div>
