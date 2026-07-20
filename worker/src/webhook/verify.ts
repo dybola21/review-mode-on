@@ -10,9 +10,7 @@ export const verifyOutputResponseSchema = z
   .strict();
 
 export type VerifyOutputResult =
-  | { kind: "ok"; exists: boolean; size: number }
-  | { kind: "transient" }
-  | { kind: "auth" };
+  { kind: "ok"; exists: boolean; size: number } | { kind: "transient" } | { kind: "auth" };
 
 /**
  * Ask the app whether a workerOutputId that we recorded locally as
