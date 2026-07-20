@@ -11,6 +11,10 @@ import {
   type TemplateSettings,
 } from "@/lib/project-schemas";
 
+const MIN_HEADER_RATIO = 0.2;
+const MAX_HEADER_RATIO = 0.4;
+const DEFAULT_HEADER_RATIO = 0.335;
+
 export function TemplateEditor({ projectId, initial }: { projectId: string; initial: unknown }) {
   const parsed = templateSettingsSchema.safeParse(initial);
   const [tpl, setTpl] = useState<TemplateSettings>(
@@ -37,26 +41,34 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
     [filesQuery.data],
   );
 
-  // Signed URL for the currently-selected logo (for the live preview).
+  // Signed URL para a arte de cabeçalho selecionada.
+  const [headerUrl, setHeaderUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const id = tpl.header_image_file_id;
+    if (!id || !imageFiles.find((f) => f.id === id)) {
+      setHeaderUrl(null);
+      return;
+    }
+    previewFn({ data: { id } })
+      .then((r) => alive && setHeaderUrl(r.url))
+      .catch(() => alive && setHeaderUrl(null));
+    return () => {
+      alive = false;
+    };
+  }, [tpl.header_image_file_id, imageFiles, previewFn]);
+
+  // Signed URL para logo opcional (marca d'água).
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    if (!tpl.logo_file_id) {
-      setLogoUrl(null);
-      return;
-    }
-    // Ensure the selected logo still exists among the project images.
-    if (!imageFiles.find((f) => f.id === tpl.logo_file_id)) {
+    if (!tpl.logo_file_id || !imageFiles.find((f) => f.id === tpl.logo_file_id)) {
       setLogoUrl(null);
       return;
     }
     previewFn({ data: { id: tpl.logo_file_id } })
-      .then((r) => {
-        if (alive) setLogoUrl(r.url);
-      })
-      .catch(() => {
-        if (alive) setLogoUrl(null);
-      });
+      .then((r) => alive && setLogoUrl(r.url))
+      .catch(() => alive && setLogoUrl(null));
     return () => {
       alive = false;
     };
@@ -72,152 +84,201 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
     setTpl((prev) => ({ ...prev, [key]: value }));
   }
 
+  function handleHeaderSelect(id: string) {
+    setTpl((prev) => {
+      const next: TemplateSettings = { ...prev, header_image_file_id: id || null };
+      // Ao selecionar a primeira arte, se altura atual < mínimo recomendado,
+      // subir para o padrão de 33,5%.
+      if (id && prev.header_height_ratio < MIN_HEADER_RATIO) {
+        next.header_height_ratio = DEFAULT_HEADER_RATIO;
+      }
+      return next;
+    });
+  }
+
+  const headerRatioPct = Math.round(tpl.header_height_ratio * 100);
+  const canSave = Boolean(tpl.header_image_file_id);
+
   return (
     <div className="surface-card p-6">
       <div className="mb-4">
         <h2 className="text-lg font-semibold">Template do projeto</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Identidade visual aplicada a todas as variações.
+          Envie uma arte pronta (logo + textos) que ocupará o topo do vídeo 9:16. O vídeo entra
+          logo abaixo, sem sobreposição.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Nome da página">
-              <input
-                className="input"
-                value={tpl.page_name}
-                onChange={(e) => set("page_name", e.target.value)}
-                maxLength={80}
-              />
-            </Field>
-            <Field label="Identificador">
-              <input
-                className="input"
-                value={tpl.identifier}
-                onChange={(e) => set("identifier", e.target.value)}
-                maxLength={60}
-                placeholder="@usuario"
-              />
-            </Field>
-          </div>
-
-          <Field label="Frase principal">
-            <textarea
-              className="input min-h-[64px]"
-              value={tpl.headline}
-              onChange={(e) => set("headline", e.target.value)}
-              maxLength={160}
-            />
-          </Field>
-
-          <Field label="Logo">
+          <Field label="Arte do cabeçalho (obrigatória)">
             {imageFiles.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Envie uma imagem no bloco de arquivos para poder selecioná-la como logo.
+                Envie uma imagem no bloco de arquivos para poder selecioná-la como arte do
+                cabeçalho. Recomendado: 1080×640 px, com textos dentro de uma margem segura.
               </p>
             ) : (
-              <div className="flex items-center gap-3">
+              <div className="space-y-2">
                 <select
-                  className="input flex-1"
-                  value={tpl.logo_file_id ?? ""}
-                  onChange={(e) => set("logo_file_id", e.target.value ? e.target.value : null)}
+                  className="input w-full"
+                  value={tpl.header_image_file_id ?? ""}
+                  onChange={(e) => handleHeaderSelect(e.target.value)}
                 >
-                  <option value="">— Sem logo —</option>
+                  <option value="">— Selecione a arte —</option>
                   {imageFiles.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.file_name}
                     </option>
                   ))}
                 </select>
-                {tpl.logo_file_id && (
-                  <button
-                    type="button"
-                    onClick={() => set("logo_file_id", null)}
-                    className="text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    Remover
-                  </button>
+                <p className="text-[11px] text-muted-foreground">
+                  Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para
+                  evitar corte no modo &quot;Preencher&quot;.
+                </p>
+                {tpl.header_image_file_id && headerUrl && (
+                  <div className="rounded-md border border-border bg-surface p-2">
+                    <img
+                      src={headerUrl}
+                      alt="Arte do cabeçalho"
+                      className="max-h-24 w-full object-contain"
+                    />
+                  </div>
                 )}
-              </div>
-            )}
-            {tpl.logo_file_id && logoUrl && (
-              <div className="mt-2 flex items-center gap-2 rounded-md border border-border bg-surface p-2">
-                <img src={logoUrl} alt="Logo" className="max-h-10 object-contain" />
-                <span className="text-xs text-muted-foreground">Preview do logo selecionado</span>
               </div>
             )}
           </Field>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <ColorField
-              label="Fundo"
-              value={tpl.background_color}
-              onChange={(v) => set("background_color", v)}
-            />
-            <ColorField
-              label="Texto"
-              value={tpl.text_color}
-              onChange={(v) => set("text_color", v)}
-            />
-            <ColorField
-              label="Destaque"
-              value={tpl.accent_color}
-              onChange={(v) => set("accent_color", v)}
-            />
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Posição da marca">
-              <select
-                className="input"
-                value={tpl.watermark_position}
-                onChange={(e) =>
-                  set(
-                    "watermark_position",
-                    e.target.value as TemplateSettings["watermark_position"],
-                  )
-                }
-              >
-                <option value="top-left">Sup. esquerda</option>
-                <option value="top-right">Sup. direita</option>
-                <option value="bottom-left">Inf. esquerda</option>
-                <option value="bottom-right">Inf. direita</option>
-              </select>
-            </Field>
-            <Field label={`Opacidade da marca (${Math.round(tpl.watermark_opacity * 100)}%)`}>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={`Altura do cabeçalho (${headerRatioPct}%)`}>
               <input
                 type="range"
-                min={0}
-                max={100}
-                value={Math.round(tpl.watermark_opacity * 100)}
-                onChange={(e) => set("watermark_opacity", Number(e.target.value) / 100)}
-              />
-            </Field>
-            <Field label={`Área superior (${Math.round(tpl.header_height_ratio * 100)}%)`}>
-              <input
-                type="range"
-                min={5}
-                max={40}
-                value={Math.round(tpl.header_height_ratio * 100)}
+                min={Math.round(MIN_HEADER_RATIO * 100)}
+                max={Math.round(MAX_HEADER_RATIO * 100)}
+                value={headerRatioPct}
                 onChange={(e) => set("header_height_ratio", Number(e.target.value) / 100)}
               />
+              <p className="text-[11px] text-muted-foreground">
+                Faixa recomendada: 20%–40%. Padrão 33,5%.
+              </p>
+            </Field>
+            <Field label="Ajuste da arte">
+              <div className="flex gap-2">
+                <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface p-2 text-xs">
+                  <input
+                    type="radio"
+                    name="header_fit"
+                    checked={tpl.header_image_fit === "cover"}
+                    onChange={() => set("header_image_fit", "cover")}
+                  />
+                  <span>
+                    <strong>Preencher</strong>
+                    <span className="block text-[10px] text-muted-foreground">
+                      Corta se necessário
+                    </span>
+                  </span>
+                </label>
+                <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-md border border-border bg-surface p-2 text-xs">
+                  <input
+                    type="radio"
+                    name="header_fit"
+                    checked={tpl.header_image_fit === "contain"}
+                    onChange={() => set("header_image_fit", "contain")}
+                  />
+                  <span>
+                    <strong>Mostrar inteira</strong>
+                    <span className="block text-[10px] text-muted-foreground">
+                      Fundo preto se sobrar
+                    </span>
+                  </span>
+                </label>
+              </div>
             </Field>
           </div>
 
-          <div className="flex justify-end">
+          <div className="rounded-md border border-border p-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Marca d&apos;água (opcional)
+            </div>
+            <Field label="Imagem da marca d'água">
+              {imageFiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Envie uma imagem para usar como marca d&apos;água.
+                </p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <select
+                    className="input flex-1"
+                    value={tpl.logo_file_id ?? ""}
+                    onChange={(e) => set("logo_file_id", e.target.value || null)}
+                  >
+                    <option value="">— Sem marca d&apos;água —</option>
+                    {imageFiles.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.file_name}
+                      </option>
+                    ))}
+                  </select>
+                  {tpl.logo_file_id && (
+                    <button
+                      type="button"
+                      onClick={() => set("logo_file_id", null)}
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      Remover
+                    </button>
+                  )}
+                </div>
+              )}
+            </Field>
+            {tpl.logo_file_id && (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <Field label="Posição">
+                  <select
+                    className="input"
+                    value={tpl.watermark_position}
+                    onChange={(e) =>
+                      set(
+                        "watermark_position",
+                        e.target.value as TemplateSettings["watermark_position"],
+                      )
+                    }
+                  >
+                    <option value="top-left">Sup. esquerda</option>
+                    <option value="top-right">Sup. direita</option>
+                    <option value="bottom-left">Inf. esquerda</option>
+                    <option value="bottom-right">Inf. direita</option>
+                  </select>
+                </Field>
+                <Field label={`Opacidade (${Math.round(tpl.watermark_opacity * 100)}%)`}>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={Math.round(tpl.watermark_opacity * 100)}
+                    onChange={(e) => set("watermark_opacity", Number(e.target.value) / 100)}
+                  />
+                </Field>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between">
+            {!canSave && (
+              <p className="text-xs text-amber-600">
+                Selecione a arte do cabeçalho antes de salvar.
+              </p>
+            )}
             <button
               onClick={() => save.mutate()}
-              disabled={save.isPending}
-              className="rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+              disabled={save.isPending || !canSave}
+              className="ml-auto rounded-md gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
             >
               {save.isPending ? "Salvando…" : "Salvar template"}
             </button>
           </div>
         </div>
 
-        <TemplatePreview9x16 template={tpl} logoUrl={logoUrl} />
+        <TemplatePreview9x16 template={tpl} headerUrl={headerUrl} logoUrl={logoUrl} />
       </div>
     </div>
   );
@@ -229,34 +290,5 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
-  );
-}
-
-function ColorField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <Field label={label}>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-12 cursor-pointer rounded border border-border bg-surface"
-        />
-        <input
-          className="input flex-1 font-mono text-xs"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          maxLength={9}
-        />
-      </div>
-    </Field>
   );
 }

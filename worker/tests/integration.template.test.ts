@@ -198,6 +198,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       outDir: dir,
       jobId: "job-1",
       logoPath: logo,
+      headerImagePath: null,
       ffmpegTimeoutMs: 30_000,
     });
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
@@ -323,6 +324,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         outDir: dir,
         jobId: "job-2",
         logoPath: null,
+        headerImagePath: null,
         ffmpegTimeoutMs: 30_000,
       }),
     ).rejects.toThrow(/template_logo_invalid/);
@@ -340,8 +342,174 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         outDir: dir,
         jobId: "job-3",
         logoPath: bogus,
+        headerImagePath: null,
         ffmpegTimeoutMs: 15_000,
       }),
     ).rejects.toThrow(/template_logo_invalid/);
+  }, 30_000);
+
+  it("header-art mode: renders 1080x1920 with the image at the top, black video area below, and no legacy text", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-hdr-"));
+    const src = path.join(dir, "src.mp4");
+    // Blue header art so we can distinguish it from the green source video.
+    const headerArt = path.join(dir, "header.png");
+    await makeSyntheticSource(src);
+    await runFfmpeg([
+      "-y",
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=0x0033CC:s=1080x640:d=0.1",
+      "-frames:v",
+      "1",
+      headerArt,
+    ]);
+
+    const W = 1080;
+    const H = 1920;
+    const headerTemplate: TemplateSettings = {
+      // Legacy fields are set but MUST be ignored when header_image_file_id exists.
+      page_name: "LEGACY_TEXT",
+      identifier: "@legacy",
+      headline: "LEGACY_HEADLINE_TEXT_SHOULD_NOT_APPEAR",
+      logo_file_id: null,
+      background_color: "#0F0F12",
+      text_color: "#FFFFFF",
+      accent_color: "#FF5A1F",
+      watermark_position: "bottom-right",
+      watermark_opacity: 0.6,
+      header_height_ratio: 0.335,
+      header_image_file_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      header_image_fit: "cover",
+    };
+
+    const assets = await buildTemplateOverlay({
+      width: W,
+      height: H,
+      template: headerTemplate,
+      outDir: dir,
+      jobId: "job-hdr",
+      logoPath: null,
+      headerImagePath: headerArt,
+      ffmpegTimeoutMs: 30_000,
+    });
+    expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
+    expect(assets.watermarkPngPath).toBeNull();
+
+    const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+    const params = computeVariationParams(jobId, outId, 1, VARIATION);
+    const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
+    const out = path.join(dir, "out.mp4");
+    const srcProbe = await ffprobe(src);
+    await renderOutput(
+      {
+        sourceVideoPath: src,
+        headerOverlayPath: assets.headerOverlayPath,
+        watermarkPngPath: assets.watermarkPngPath,
+        watermarkSize: assets.watermarkSize,
+        watermarkPosition: headerTemplate.watermark_position,
+        watermarkOpacity: headerTemplate.watermark_opacity,
+        watermarkJitter: jitter,
+        outputPath: out,
+        variation: params,
+        targetWidth: W,
+        targetHeight: H,
+        headerHeight: assets.layout.headerHeight,
+        crf: 26,
+        timeoutMs: 60_000,
+        maxDurationSeconds: 30,
+      },
+      srcProbe,
+    );
+
+    const info = await ffprobe(out);
+    expect(info.width).toBe(W);
+    expect(info.height).toBe(H);
+
+    const frame = await extractFrameRgb24(out, W, H);
+    const headerH = assets.layout.headerHeight;
+    expect(headerH).toBeGreaterThan(H * 0.3);
+
+    // Header band is dominated by blue from the header art (#0033CC).
+    const hdrBand = avgRegion(
+      frame,
+      W,
+      Math.floor(W * 0.4),
+      Math.floor(headerH * 0.5),
+      120,
+      40,
+    );
+    expect(hdrBand[2]).toBeGreaterThan(140);
+    expect(hdrBand[0]).toBeLessThan(80);
+
+    // Video band below the header is the green source.
+    const vidBand = avgRegion(
+      frame,
+      W,
+      Math.floor(W * 0.4),
+      headerH + Math.floor((H - headerH) * 0.5),
+      120,
+      40,
+    );
+    expect(vidBand[1]).toBeGreaterThan(120);
+    expect(vidBand[0]).toBeLessThan(80);
+    expect(vidBand[2]).toBeLessThan(80);
+
+    // Accent color must NOT appear in the header — the legacy accent bar is
+    // gone in header-art mode.
+    let sawAccent = false;
+    for (let y = 0; y < headerH && !sawAccent; y += 4) {
+      for (let x = 0; x < W && !sawAccent; x += 8) {
+        const p = pixel(frame, W, x, y);
+        if (isNear(p, [0xff, 0x5a, 0x1f], 30)) sawAccent = true;
+      }
+    }
+    expect(sawAccent).toBe(false);
+
+    // Legacy headline (white text with dark stroke) must NOT be drawn.
+    let sawHeadlineText = false;
+    const headlineTop = Math.floor(H * 0.75);
+    const headlineBottom = Math.floor(H * 0.95);
+    for (let y = headlineTop; y < headlineBottom && !sawHeadlineText; y += 2) {
+      for (let x = Math.floor(W * 0.1); x < Math.floor(W * 0.9) && !sawHeadlineText; x += 3) {
+        const p = pixel(frame, W, x, y);
+        if (p[0] > 230 && p[1] > 230 && p[2] > 230) sawHeadlineText = true;
+      }
+    }
+    expect(sawHeadlineText).toBe(false);
+  }, 120_000);
+
+  it("header-art mode fails cleanly with header_image_invalid when the image path is missing", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-hdrmiss-"));
+    const bad: TemplateSettings = {
+      page_name: "",
+      identifier: "",
+      headline: "",
+      logo_file_id: null,
+      background_color: "#000000",
+      text_color: "#FFFFFF",
+      accent_color: "#FF5A1F",
+      watermark_position: "bottom-right",
+      watermark_opacity: 0.6,
+      header_height_ratio: 0.335,
+      header_image_file_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      header_image_fit: "cover",
+    };
+    await expect(
+      buildTemplateOverlay({
+        width: 1080,
+        height: 1920,
+        template: bad,
+        outDir: dir,
+        jobId: "job-hdr-miss",
+        logoPath: null,
+        headerImagePath: null,
+        ffmpegTimeoutMs: 15_000,
+      }),
+    ).rejects.toThrow(/header_image_invalid/);
   }, 30_000);
 });

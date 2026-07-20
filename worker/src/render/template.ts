@@ -47,6 +47,8 @@ export interface BuildTemplateArgs {
   jobId: string;
   /** Absolute path to the logo file on disk, when the template selects one. */
   logoPath: string | null;
+  /** Absolute path to the header-art image on disk, when template.header_image_file_id is set. */
+  headerImagePath: string | null;
   ffmpegTimeoutMs: number;
 }
 
@@ -81,19 +83,38 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
     throw new Error("template_logo_invalid");
   }
 
-  const svg = buildHeaderSvg({
-    width,
-    height,
-    headerHeight,
-    videoAreaHeight,
-    pageName,
-    identifier,
-    headline,
-    bg,
-    fg,
-    accent,
-    logoDataUri,
-  });
+  // Novo modo "arte pronta": a header_image_file_id define uma imagem que
+  // ocupa toda a faixa superior; nenhum texto/logo legado é renderizado.
+  const useHeaderArt = Boolean(t.header_image_file_id);
+  if (useHeaderArt && !args.headerImagePath) {
+    throw new Error("header_image_invalid");
+  }
+  const headerImageDataUri = args.headerImagePath ? loadImageAsDataUri(args.headerImagePath) : null;
+  if (useHeaderArt && !headerImageDataUri) {
+    throw new Error("header_image_invalid");
+  }
+
+  const svg = useHeaderArt
+    ? buildHeaderArtSvg({
+        width,
+        height,
+        headerHeight,
+        fit: t.header_image_fit,
+        imageDataUri: headerImageDataUri as string,
+      })
+    : buildHeaderSvg({
+        width,
+        height,
+        headerHeight,
+        videoAreaHeight,
+        pageName,
+        identifier,
+        headline,
+        bg,
+        fg,
+        accent,
+        logoDataUri,
+      });
 
   const base = safeBaseName(args.jobId);
   const svgPath = ensureInsideDir(args.outDir, `overlay_header_${base}.svg`);
@@ -131,6 +152,29 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
     watermarkSize,
     layout: { width, height, headerHeight, videoAreaHeight },
   };
+}
+
+interface HeaderArtSvgArgs {
+  width: number;
+  height: number;
+  headerHeight: number;
+  fit: "cover" | "contain";
+  imageDataUri: string;
+}
+
+function buildHeaderArtSvg(o: HeaderArtSvgArgs): string {
+  // "cover" preenche e corta centralmente (slice); "contain" mostra tudo
+  // com letterboxing preto (meet + fundo preto na faixa).
+  const preserve = o.fit === "cover" ? "xMidYMid slice" : "xMidYMid meet";
+  const bgRect =
+    o.fit === "contain"
+      ? `<rect x="0" y="0" width="${o.width}" height="${o.headerHeight}" fill="#000000"/>`
+      : "";
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${o.width}" height="${o.height}" viewBox="0 0 ${o.width} ${o.height}">
+${bgRect}
+<image href="${o.imageDataUri}" x="0" y="0" width="${o.width}" height="${o.headerHeight}" preserveAspectRatio="${preserve}"/>
+</svg>`;
 }
 
 interface HeaderSvgArgs {

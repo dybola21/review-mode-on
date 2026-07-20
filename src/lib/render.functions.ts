@@ -247,13 +247,17 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Envie pelo menos um vídeo antes de processar.");
     }
 
-    // 2b) Assets referenced by the template (logo only for MVP). Never sent
-    //     if not referenced — server derives file_type from project_files.
+    // 2b) Assets referenced by the template (logo e/ou arte do cabeçalho).
+    //     Nunca enviamos assets não referenciados — o servidor deriva
+    //     file_type de project_files (jamais confia no cliente).
     const templateSettings = (project.template_settings ?? {}) as {
       logo_file_id?: string | null;
+      header_image_file_id?: string | null;
     };
     const referencedAssetIds = new Set<string>();
     if (templateSettings.logo_file_id) referencedAssetIds.add(templateSettings.logo_file_id);
+    if (templateSettings.header_image_file_id)
+      referencedAssetIds.add(templateSettings.header_image_file_id);
 
     let assetFiles: Array<{
       id: string;
@@ -281,6 +285,12 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         }
         if (id === templateSettings.logo_file_id && !found.mime_type.startsWith("image/")) {
           throw clientError("O logo do template precisa ser uma imagem.");
+        }
+        if (
+          id === templateSettings.header_image_file_id &&
+          !found.mime_type.startsWith("image/")
+        ) {
+          throw clientError("A arte do cabeçalho precisa ser uma imagem.");
         }
       }
     }
