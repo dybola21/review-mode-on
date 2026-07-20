@@ -135,8 +135,7 @@ function ProjectCard({ project, archived }: { project: ProjectRow; archived?: bo
           <div className="min-w-0 flex-1">
             <h3 className="truncate font-semibold group-hover:text-primary">{project.name}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              {new Date(project.created_at).toLocaleDateString("pt-BR")} · {project.variation_count}{" "}
-              variações
+              {new Date(project.created_at).toLocaleDateString("pt-BR")}
             </p>
           </div>
         </div>
