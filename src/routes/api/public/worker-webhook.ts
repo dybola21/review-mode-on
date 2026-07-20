@@ -150,8 +150,6 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         // from the header timestamp (created at dispatch/retry). Freshness is
         // enforced on the header only; the body value is covered by the HMAC.
 
-
-
         let supabaseAdmin: AdminLike;
         try {
           const mod = await import("@/integrations/supabase/client.server");
