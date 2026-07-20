@@ -67,16 +67,23 @@ async function assertProjectOwner(supabase: SB, projectId: string): Promise<void
 }
 
 /**
- * Expira pendências vencidas (globalmente, via RPC), depois remove os
- * objetos órfãos do Storage para o projeto e apaga as linhas expiradas
- * deste projeto. Evita objetos órfãos indefinidamente e libera o slot
- * antes de contar o limite do projeto.
+ * Expira pendências vencidas (globalmente, via RPC) e, se a RPC for bem
+ * sucedida, remove os objetos órfãos do Storage deste projeto e apaga do
+ * banco somente as linhas cujos objetos foram removidos com sucesso.
+ *
+ * - Se a RPC falha, lança erro transitório e NÃO segue para contagem.
+ * - Linhas cujo `Storage.remove` falha permanecem como `expired` para
+ *   uma limpeza futura — nunca apagamos o registro do banco enquanto o
+ *   objeto físico permanecer no bucket.
  */
-async function cleanupExpiredProjectFiles(supabaseAdmin: SB, projectId: string): Promise<void> {
-  try {
-    await supabaseAdmin.rpc("expire_pending_project_files");
-  } catch (e) {
-    console.warn("[cleanupExpiredProjectFiles] rpc skipped", e);
+export async function cleanupExpiredProjectFiles(
+  supabaseAdmin: SB,
+  projectId: string,
+): Promise<void> {
+  const { error: rpcError } = await supabaseAdmin.rpc("expire_pending_project_files");
+  if (rpcError) {
+    console.error("[cleanupExpiredProjectFiles] rpc", rpcError);
+    throw clientError("Falha temporária ao liberar uploads expirados. Tente novamente.");
   }
 
   const { data: expired, error } = await supabaseAdmin
@@ -91,32 +98,43 @@ async function cleanupExpiredProjectFiles(supabaseAdmin: SB, projectId: string):
   }
   if (!expired || expired.length === 0) return;
 
-  const byBucket = new Map<string, string[]>();
+  // Agrupa por bucket, preservando o vínculo entre id e path para saber
+  // exatamente quais linhas podem ser apagadas após o remove().
+  type ExpiredRow = { id: string; path: string };
+  const byBucket = new Map<string, ExpiredRow[]>();
   for (const row of expired) {
     const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
     if (!bucket) continue;
     const list = byBucket.get(bucket) ?? [];
-    list.push(row.storage_path);
+    list.push({ id: row.id, path: row.storage_path });
     byBucket.set(bucket, list);
   }
-  for (const [bucket, paths] of byBucket) {
+
+  const removableIds: string[] = [];
+  for (const [bucket, rows] of byBucket) {
+    const paths = rows.map((r) => r.path);
     const { error: rmErr } = await supabaseAdmin.storage.from(bucket).remove(paths);
     if (rmErr) {
+      // Preserva as linhas como `expired` para uma nova tentativa de limpeza.
       console.warn("[cleanupExpiredProjectFiles] remove", bucket, rmErr);
+      continue;
     }
+    for (const r of rows) removableIds.push(r.id);
   }
+
+  if (removableIds.length === 0) return;
 
   const { error: delErr } = await supabaseAdmin
     .from("project_files")
     .delete()
-    .eq("project_id", projectId)
-    .eq("status", "expired");
+    .in("id", removableIds);
   if (delErr) {
     console.warn("[cleanupExpiredProjectFiles] delete", delErr);
   }
 }
 
 // ----- listar arquivos -----
+
 export const listProjectFiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => projectIdSchema.parse(data))
