@@ -3,11 +3,7 @@ import path from "node:path";
 
 import type { QueueDB, QueueRow } from "../queue/db.js";
 import type { JobPayload, InputFile } from "../types/contract.js";
-import {
-  jobPayloadSchema,
-  templateSettingsSchema,
-  variationSettingsSchema,
-} from "../types/contract.js";
+import { jobPayloadSchema, templateSettingsSchema } from "../types/contract.js";
 import {
   downloadInput,
   ffprobe,
@@ -18,7 +14,6 @@ import { uploadOutput, UploadError } from "../storage/upload.js";
 import { ensureInsideDir, jobDirName, safeBaseName } from "../storage/paths.js";
 import { buildTemplateOverlay, assertTemplateSafe } from "./template.js";
 import { renderOutput, RenderError } from "./ffmpeg.js";
-import { computeVariationParams, computeWatermarkOffset } from "./variation.js";
 import { renewInputUrl, renewUploadUrl } from "../webhook/renew.js";
 import { verifyRemoteOutput } from "../webhook/verify.js";
 
@@ -31,8 +26,8 @@ const OUT_H = 1920;
 const DEFAULT_CRF = 22;
 
 /**
- * Full pipeline for one job. Idempotent per workerJobId — the caller
- * ensures we don't run twice for the same row.
+ * v2 pipeline: sequential 1 header art + N source videos → N outputs.
+ * Every output is tied to exactly one sourceFileId. No variation filters.
  */
 export async function runJob(
   db: QueueDB,
@@ -49,15 +44,12 @@ export async function runJob(
   }
   const payload = parsed.data;
 
-  // Validate template + variation settings.
   const templateResult = templateSettingsSchema.safeParse(payload.templateSettings);
-  const variationResult = variationSettingsSchema.safeParse(payload.variationSettings);
-  if (!templateResult.success || !variationResult.success) {
-    fail(db, row, "invalid_template", "Template ou variação inválidos.");
+  if (!templateResult.success) {
+    fail(db, row, "invalid_template", "Template inválido.");
     return;
   }
   const template = templateResult.data;
-  const variation = variationResult.data;
   try {
     assertTemplateSafe(template);
   } catch {
@@ -75,11 +67,19 @@ export async function runJob(
 
   const heartbeat = new WallClockLimit(cfg.MAX_JOB_DURATION_SECONDS * 1000);
 
+  log.info({ inputs: payload.inputFiles.length, outputs: payload.outputTargets.length }, "job_claimed");
+
+  // Signal "processing" immediately so the app updates the UI.
+  enqueueWebhook(db, {
+    eventType: "status_update",
+    jobId: payload.jobId,
+    workerJobId: row.worker_job_id,
+    status: "processing",
+    progress: 1,
+  });
+
   try {
-    // 1) Download all inputs.
     const localById = new Map<string, { path: string; input: InputFile }>();
-    const totalSteps = payload.inputFiles.length + payload.outputTargets.length * 2;
-    let stepsDone = 0;
 
     for (const inp of payload.inputFiles) {
       cancel.throwIfAborted();
@@ -87,20 +87,16 @@ export async function runJob(
       const dl = await downloadWithRenew(inp, inputDir, payload, row.worker_job_id, cfg);
       const probe = await ffprobe(dl.localPath);
       if (inp.fileType !== "template_asset") {
-        // template_asset may be an svg/png — validated via mime.
         assertMimeMatchesProbe(inp.mimeType, probe);
       }
       localById.set(inp.fileId, { path: dl.localPath, input: inp });
-      stepsDone += 1;
-      emitProgress(db, row, stepsDone, totalSteps);
     }
 
-    const source = [...localById.values()].filter((v) => v.input.fileType === "source_video");
-    if (source.length === 0) {
+    const sourceList = [...localById.values()].filter((v) => v.input.fileType === "source_video");
+    if (sourceList.length === 0) {
       throw new RenderError("invalid_job", "Nenhum vídeo de origem.");
     }
 
-    // Logo must exist in inputs AND be an image when referenced by the template.
     let logoPath: string | null = null;
     if (template.logo_file_id) {
       const logoEntry = localById.get(template.logo_file_id);
@@ -113,7 +109,6 @@ export async function runJob(
       logoPath = logoEntry.path;
     }
 
-    // Header art (novo layout): imagem obrigatória do projeto no topo do frame.
     let headerImagePath: string | null = null;
     let headerImageNaturalSize: { w: number; h: number } | null = null;
     if (template.header_image_file_id) {
@@ -135,7 +130,6 @@ export async function runJob(
       }
     }
 
-    // 2) Build template overlay once per job (header + optional watermark PNG).
     const overlay = await buildTemplateOverlay({
       width: OUT_W,
       height: OUT_H,
@@ -148,19 +142,14 @@ export async function runJob(
       ffmpegTimeoutMs: 60_000,
     });
 
-    // Watermark jitter budget: up to 4% of frame width.
-    const jitterBudget = Math.round(OUT_W * 0.04);
-
-    // 3) Render outputs, one at a time. Skip outputs already uploaded
-    //    in a previous run — but only after confirming remotely that
-    //    the object is present and non-empty. Missing/empty marks are
-    //    dropped and the output is reprocessed. If verification stays
-    //    transient after all retries, the whole job is requeued for a
-    //    later attempt: we NEVER re-render or delete an uploaded mark
-    //    without a confirmed answer from the app.
+    // Skip outputs already uploaded in a previous run (with remote check).
     const alreadyUploaded = new Set(
       db.listUploadedOutputs(row.worker_job_id).map((o) => o.worker_output_id),
     );
+
+    const totalTargets = payload.outputTargets.length;
+    let processedCount = 0;
+
     for (const target of payload.outputTargets) {
       cancel.throwIfAborted();
       heartbeat.check();
@@ -178,41 +167,25 @@ export async function runJob(
           throw new RenderError("verify_output_unauthorized", "Verificação de output negada.");
         }
         if (action === "defer") {
-          // App unreachable — preserve the uploaded mark and requeue.
           throw new RecoveryDeferError(target.workerOutputId);
         }
         if (action === "skip") {
-          stepsDone += 2;
-          emitProgress(db, row, stepsDone, totalSteps);
+          processedCount += 1;
+          emitProgress(db, row, processedCount, totalTargets);
           continue;
         }
-        // action === "reprocess": app confirmed the object is missing or
-        // empty. Drop the local mark and re-render this specific output.
         db.deleteUploadedOutput(row.worker_job_id, target.workerOutputId);
         alreadyUploaded.delete(target.workerOutputId);
       }
 
-      const idx = payload.outputTargets.indexOf(target);
-      const perSource = payload.variationCount;
-      const sourceIdx = Math.floor(idx / perSource) % source.length;
-      const variationIdx = (idx % perSource) + 1;
-      const src = source[sourceIdx];
-      if (!src) throw new RenderError("invalid_job", "Fonte inválida.");
+      const src = localById.get(target.sourceFileId);
+      if (!src || src.input.fileType !== "source_video") {
+        throw new RenderError("invalid_job", "sourceFileId não encontrado nos inputs.");
+      }
+
+      log.info({ sourceFileId: target.sourceFileId }, "input_started");
 
       const outLocal = ensureInsideDir(outputDir, `${safeBaseName(target.workerOutputId)}.mp4`);
-      const params = computeVariationParams(
-        payload.jobId,
-        target.workerOutputId,
-        variationIdx,
-        variation,
-      );
-      const jitter = computeWatermarkOffset(
-        payload.jobId,
-        target.workerOutputId,
-        variationIdx,
-        variation.watermark_position_jitter,
-        jitterBudget,
-      );
       const srcProbe = await ffprobe(src.path);
       await renderOutput(
         {
@@ -222,9 +195,7 @@ export async function runJob(
           watermarkSize: overlay.watermarkSize,
           watermarkPosition: template.watermark_position,
           watermarkOpacity: template.watermark_opacity,
-          watermarkJitter: jitter,
           outputPath: outLocal,
-          variation: params,
           targetWidth: OUT_W,
           targetHeight: OUT_H,
           headerHeight: overlay.layout.headerHeight,
@@ -233,19 +204,16 @@ export async function runJob(
           maxDurationSeconds: cfg.MAX_JOB_DURATION_SECONDS,
           cancel,
           onProgress: (p) => {
-            const localFraction = (stepsDone + p / 100) / totalSteps;
+            const fraction = (processedCount + p / 100) / totalTargets;
             db.updateProgress(
               row.worker_job_id,
-              Math.min(99, Math.max(1, Math.round(localFraction * 100))),
+              Math.min(99, Math.max(1, Math.round(fraction * 100))),
             );
           },
         },
         srcProbe,
       );
-      stepsDone += 1;
-      emitProgress(db, row, stepsDone, totalSteps);
 
-      // Upload with renewal on 401/403.
       await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg);
       db.recordUploadedOutput(
         row.worker_job_id,
@@ -253,22 +221,25 @@ export async function runJob(
         (await fs.stat(outLocal)).size,
         null,
       );
-      // Remove local output right away.
       await fs.rm(outLocal, { force: true });
-      stepsDone += 1;
-      emitProgress(db, row, stepsDone, totalSteps);
 
-      // Emit processing webhook (rate-limited via enqueue).
+      processedCount += 1;
+      emitProgress(db, row, processedCount, totalTargets);
+
+      log.info(
+        { sourceFileId: target.sourceFileId, done: processedCount, total: totalTargets },
+        "input_completed",
+      );
+
       enqueueWebhook(db, {
         eventType: "status_update",
         jobId: payload.jobId,
         workerJobId: row.worker_job_id,
         status: "processing",
-        progress: Math.min(99, Math.round((stepsDone / totalSteps) * 100)),
+        progress: Math.min(99, Math.round((processedCount / totalTargets) * 100)),
       });
     }
 
-    // 4) All uploads confirmed → completed.
     const uploaded = db.listUploadedOutputs(row.worker_job_id);
     if (uploaded.length !== payload.outputTargets.length) {
       throw new RenderError("output_upload_failed", "Uploads incompletos.");
@@ -291,7 +262,7 @@ export async function runJob(
         };
       }),
     });
-    log.info("job completed");
+    log.info("job_completed");
   } catch (err) {
     if (err instanceof RecoveryDeferError) {
       log.warn(
@@ -299,12 +270,10 @@ export async function runJob(
         "recovery verification transient — requeueing job without failing",
       );
       db.requeueForRecovery(row.worker_job_id);
-      // Intentionally NO fail() and NO failed webhook — the scheduler
-      // will pick the job up again on the next tick.
       return;
     }
     const { code, message } = classifyError(err);
-    log.warn({ code }, "job failed");
+    log.warn({ code }, "job_failed");
     fail(db, row, code, message);
     enqueueWebhook(db, {
       eventType: "status_update",
@@ -315,7 +284,6 @@ export async function runJob(
       errorCode: code,
     });
   } finally {
-    // Best-effort cleanup of workspace.
     try {
       await fs.rm(jobRoot, { recursive: true, force: true });
     } catch {
@@ -425,11 +393,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/**
- * Sentinel thrown by the render loop when remote verification stays
- * transient after every retry. Caught by runJob to requeue the job
- * WITHOUT marking it failed and WITHOUT emitting a failed webhook.
- */
 export class RecoveryDeferError extends Error {
   readonly code = "recovery_deferred";
   constructor(readonly workerOutputId: string) {
@@ -440,16 +403,6 @@ export class RecoveryDeferError extends Error {
 export type VerifyRetryResult =
   { kind: "ok"; exists: boolean; size: number } | { kind: "auth" } | { kind: "transient" };
 
-/**
- * Decide what to do with a locally-uploaded output based on remote
- * verification. Pure function — safe to unit-test.
- *
- *   - "skip"      → app confirmed the object exists and has bytes.
- *   - "reprocess" → app confirmed the object is missing or empty.
- *   - "abort"     → auth failure (workerJobId mismatch, HMAC, etc.).
- *   - "defer"     → verification stayed transient; the job must be
- *                   requeued WITHOUT touching uploaded_outputs.
- */
 export function decideRecoveryAction(
   v: VerifyRetryResult,
 ): "skip" | "reprocess" | "abort" | "defer" {
@@ -459,14 +412,6 @@ export function decideRecoveryAction(
   return "reprocess";
 }
 
-/**
- * Verify a remotely-recorded output, retrying transient failures with
- * exponential backoff. If verification stays transient across every
- * attempt, returns `{ kind: "transient" }` — the caller MUST NOT
- * delete the local uploaded mark and MUST NOT re-render. Only a
- * confirmed `exists=false` or `size=0` from the app authorises
- * dropping the mark and reprocessing.
- */
 export async function verifyRemoteOutputWithRetry(
   cfg: Config,
   jobId: string,
@@ -482,10 +427,8 @@ export async function verifyRemoteOutputWithRetry(
     const r = await verifyRemoteOutput(cfg, jobId, workerJobId, workerOutputId);
     if (r.kind === "ok") return r;
     if (r.kind === "auth") return r;
-    // transient → retry
   }
   return { kind: "transient" };
 }
 
-// Path is used indirectly through ensureInsideDir; explicit import kept for clarity.
 void path;
