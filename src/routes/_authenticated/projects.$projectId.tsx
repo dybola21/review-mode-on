@@ -6,8 +6,7 @@ import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteProject, getProject, updateProject } from "@/lib/projects.functions";
 import { getAppSettings } from "@/lib/app-settings.functions";
-import { ProjectFilesSection } from "@/components/project-files-section";
-import { TemplateEditor } from "@/components/template-editor";
+import { MediaSection } from "@/components/media-section";
 import { VariationsEditor } from "@/components/variations-editor";
 import { RightsSection } from "@/components/rights-section";
 import { RenderSection } from "@/components/render-section";
@@ -177,10 +176,9 @@ function EditProjectPage() {
 
       {settingsQuery.data && (
         <div className="mt-6 space-y-6">
-          <ProjectFilesSection projectId={projectId} settings={settingsQuery.data} />
-          <TemplateEditor
+          <MediaSection
             projectId={projectId}
-            initial={project.template_settings}
+            initialTemplate={project.template_settings}
             settings={settingsQuery.data}
           />
           <VariationsEditor

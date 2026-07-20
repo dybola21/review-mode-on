@@ -83,7 +83,7 @@ export const DEFAULT_VARIATION_SETTINGS: VariationSettings = {
 
 export const RIGHTS_CONFIRMATION_VERSION = "1.0";
 export const RIGHTS_CONFIRMATION_TEXT =
-  "Confirmo que possuo os direitos ou a autorização necessária para utilizar e editar todos os vídeos, imagens, logotipos, textos e áudios enviados neste projeto.";
+  "Confirmo que possuo os direitos ou a autorização necessária para utilizar e editar todos os vídeos, imagens, logotipos e textos enviados neste projeto.";
 
 /**
  * Sanitização de nome de arquivo. Mantém letras, números, hífen, underscore e ponto.

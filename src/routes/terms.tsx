@@ -24,7 +24,7 @@ function TermsPage() {
         </p>
         <p>
           Você é integralmente responsável por garantir que possui os direitos sobre todo o conteúdo
-          enviado, incluindo vídeos, imagens, logotipos, textos e áudios.
+          enviado, incluindo vídeos, imagens, logotipos e textos.
         </p>
         <p>
           É proibido utilizar a ferramenta para burlar sistemas de detecção, moderação ou políticas
