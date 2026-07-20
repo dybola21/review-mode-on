@@ -194,8 +194,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
     expect(assets.watermarkPngPath).toBeTruthy();
 
-    const jobId = "11111111-1111-1111-1111-111111111111";
-    const outId = "22222222-2222-2222-2222-222222222222";
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -381,8 +379,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
     expect(assets.watermarkPngPath).toBeNull();
 
-    const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -545,8 +541,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         headerImageNaturalSize: { w: 1080, h: 1920 },
         ffmpegTimeoutMs: 30_000,
       });
-      const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-      const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
       const out = path.join(subDir, "out.mp4");
       const srcProbe = await ffprobe(src);
       await renderOutput(
