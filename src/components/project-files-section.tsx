@@ -123,10 +123,10 @@ export function ProjectFilesSection({
 
       await confirmFn({
         data: {
-          project_id: projectId,
           file_id: prepared.file_id,
         },
       });
+
 
       updateItem(item.key, { status: "done", progress: 100 });
       qc.invalidateQueries({ queryKey: ["project-files", projectId] });
