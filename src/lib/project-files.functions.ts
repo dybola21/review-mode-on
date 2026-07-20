@@ -66,6 +66,59 @@ async function assertProjectOwner(supabase: SB, projectId: string): Promise<void
   if (error || !data) throw clientError("Projeto não encontrado.");
 }
 
+/**
+ * Expira pendências vencidas (globalmente, via RPC), depois remove os
+ * objetos órfãos do Storage para o projeto e apaga as linhas expiradas
+ * deste projeto. Evita objetos órfãos indefinidamente e libera o slot
+ * antes de contar o limite do projeto.
+ */
+async function cleanupExpiredProjectFiles(
+  supabaseAdmin: SB,
+  projectId: string,
+): Promise<void> {
+  try {
+    await supabaseAdmin.rpc("expire_pending_project_files");
+  } catch (e) {
+    console.warn("[cleanupExpiredProjectFiles] rpc skipped", e);
+  }
+
+  const { data: expired, error } = await supabaseAdmin
+    .from("project_files")
+    .select("id, storage_path, file_type")
+    .eq("project_id", projectId)
+    .eq("status", "expired");
+
+  if (error) {
+    console.warn("[cleanupExpiredProjectFiles] select", error);
+    return;
+  }
+  if (!expired || expired.length === 0) return;
+
+  const byBucket = new Map<string, string[]>();
+  for (const row of expired) {
+    const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
+    if (!bucket) continue;
+    const list = byBucket.get(bucket) ?? [];
+    list.push(row.storage_path);
+    byBucket.set(bucket, list);
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error: rmErr } = await supabaseAdmin.storage.from(bucket).remove(paths);
+    if (rmErr) {
+      console.warn("[cleanupExpiredProjectFiles] remove", bucket, rmErr);
+    }
+  }
+
+  const { error: delErr } = await supabaseAdmin
+    .from("project_files")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("status", "expired");
+  if (delErr) {
+    console.warn("[cleanupExpiredProjectFiles] delete", delErr);
+  }
+}
+
 // ----- listar arquivos -----
 export const listProjectFiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
