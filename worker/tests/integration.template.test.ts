@@ -198,6 +198,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       outDir: dir,
       jobId: "job-1",
       logoPath: logo,
+      headerImagePath: null,
       ffmpegTimeoutMs: 30_000,
     });
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
@@ -323,6 +324,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         outDir: dir,
         jobId: "job-2",
         logoPath: null,
+        headerImagePath: null,
         ffmpegTimeoutMs: 30_000,
       }),
     ).rejects.toThrow(/template_logo_invalid/);
@@ -340,6 +342,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         outDir: dir,
         jobId: "job-3",
         logoPath: bogus,
+        headerImagePath: null,
         ffmpegTimeoutMs: 15_000,
       }),
     ).rejects.toThrow(/template_logo_invalid/);
