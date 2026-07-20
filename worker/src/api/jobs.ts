@@ -30,7 +30,13 @@ export function registerJobs(
     // Body validation (fastify already caps body via bodyLimit).
     const parsed = jobPayloadSchema.safeParse(req.body);
     if (!parsed.success) {
-      pinoLogger.warn({ issues: parsed.error.issues.length }, "invalid job payload");
+      // Log ONLY structural metadata: dotted path + zod code. Never values,
+      // URLs, headers, or secrets.
+      const issues = parsed.error.issues.slice(0, 20).map((i) => ({
+        path: i.path.join("."),
+        code: i.code,
+      }));
+      pinoLogger.warn({ error: "invalid_payload", issues }, "invalid job payload");
       return reply.code(400).send({ error: "invalid_payload" });
     }
     const payload = parsed.data;
@@ -43,7 +49,14 @@ export function registerJobs(
       for (const t of payload.outputTargets) {
         assertAllowedUrl(t.signedUploadUrl, cfg.ALLOWED_UPLOAD_HOSTS, "upload", cfg.isProduction);
       }
-    } catch {
+    } catch (err) {
+      // Log ONLY the rejected hostname (no URL, no query, no path).
+      let host: string | null = null;
+      if (err instanceof Error && "hostname" in err) {
+        const h = (err as { hostname?: unknown }).hostname;
+        if (typeof h === "string") host = h;
+      }
+      pinoLogger.warn({ error: "url_not_allowed", hostname: host }, "rejected url");
       return reply.code(400).send({ error: "url_not_allowed" });
     }
 
