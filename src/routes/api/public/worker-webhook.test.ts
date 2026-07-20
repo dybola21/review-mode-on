@@ -54,7 +54,7 @@ function completedPayload(): Record<string, unknown> {
   return {
     eventId: `evt-${Math.random().toString(36).slice(2)}`,
     eventType: "job.completed",
-    timestamp: String(NOW),
+    timestamp: NOW,
     jobId: JOB_ID,
     workerJobId: WORKER_JOB_ID,
     status: "completed",
