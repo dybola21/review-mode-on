@@ -251,8 +251,7 @@ export function TemplateEditor({
                     type="button"
                     onClick={() => inputRef.current?.click()}
                     disabled={
-                      headerUpload?.status === "uploading" ||
-                      headerUpload?.status === "confirming"
+                      headerUpload?.status === "uploading" || headerUpload?.status === "confirming"
                     }
                     className="inline-flex items-center gap-1.5 rounded-md gradient-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
                   >
@@ -350,8 +349,8 @@ export function TemplateEditor({
                     ))}
                   </select>
                   <p className="text-[11px] text-muted-foreground">
-                    Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para
-                    evitar corte no modo &quot;Preencher&quot;.
+                    Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para evitar
+                    corte no modo &quot;Preencher&quot;.
                   </p>
                   {tpl.header_image_file_id && headerUrl && (
                     <div className="rounded-md border border-border bg-surface p-2">

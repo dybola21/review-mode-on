@@ -302,7 +302,6 @@ export function ProjectFilesSection({
   );
 }
 
-
 // Hook útil para evitar hydration mismatch (não usado no arquivo por ora)
 export function useHydrated() {
   const [h, setH] = useState(false);

@@ -1,9 +1,6 @@
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback } from "react";
-import {
-  confirmProjectFile,
-  prepareProjectFileUpload,
-} from "@/lib/project-files.functions";
+import { confirmProjectFile, prepareProjectFileUpload } from "@/lib/project-files.functions";
 
 export type ProjectFileType = "source_video" | "logo" | "template_asset" | "music";
 
@@ -53,8 +50,7 @@ export function useProjectFileUploader() {
         url: prepared.signed_url,
         file,
         signal,
-        onProgress: (p) =>
-          onProgress?.({ phase: "uploading", percent: 15 + Math.floor(p * 0.75) }),
+        onProgress: (p) => onProgress?.({ phase: "uploading", percent: 15 + Math.floor(p * 0.75) }),
       });
       if (!uploaded) throw new Error("Upload cancelado.");
 
