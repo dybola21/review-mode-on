@@ -65,6 +65,7 @@ export type Database = {
           project_id: string
           status: string
           storage_path: string
+          upload_expires_at: string | null
           user_id: string
         }
         Insert: {
@@ -78,6 +79,7 @@ export type Database = {
           project_id: string
           status?: string
           storage_path: string
+          upload_expires_at?: string | null
           user_id: string
         }
         Update: {
@@ -91,6 +93,7 @@ export type Database = {
           project_id?: string
           status?: string
           storage_path?: string
+          upload_expires_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -377,6 +380,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      expire_pending_project_files: { Args: never; Returns: number }
       finalize_render_job: { Args: { _job_id: string }; Returns: boolean }
     }
     Enums: {

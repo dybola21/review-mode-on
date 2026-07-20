@@ -5,6 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./app-settings.functions";
 import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
+import { isUploadExpired, validateStorageObject } from "./project-files-validation";
 
 type SB = SupabaseClient<Database>;
 
@@ -130,6 +131,16 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Opportunistic cleanup: expira pendências vencidas antes de reservar nova.
+    try {
+      await supabaseAdmin.rpc("expire_pending_project_files");
+    } catch (e) {
+      console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
+    }
+
+    const UPLOAD_TTL_SECONDS = 60 * 15;
+    const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
+
     // Cria linha pendente com metadata canônica derivada no servidor.
     const { error: insErr } = await supabaseAdmin.from("project_files").insert({
       id: fileId,
@@ -141,6 +152,7 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       mime_type: data.mime_type,
       file_size: data.file_size,
       status: "pending",
+      upload_expires_at: uploadExpiresAt,
     });
     if (insErr) {
       console.error("[prepareProjectFileUpload] insert pending", insErr);
@@ -164,12 +176,12 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       safe_file_name: safeName,
       signed_url: signed.signedUrl,
       token: signed.token,
+      upload_expires_at: uploadExpiresAt,
     };
   });
 
 // ----- confirmar upload: valida objeto e transiciona pending → uploaded -----
 const confirmSchema = z.object({
-  project_id: z.string().uuid(),
   file_id: z.string().uuid(),
 });
 
@@ -180,14 +192,26 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     // Server-owned lookup: NEVER trust client-supplied metadata.
     const { data: row, error: findErr } = await context.supabase
       .from("project_files")
-      .select("id, project_id, storage_path, file_type, status, user_id")
+      .select(
+        "id, project_id, storage_path, file_type, mime_type, file_size, status, user_id, upload_expires_at",
+      )
       .eq("id", data.file_id)
-      .eq("project_id", data.project_id)
       .maybeSingle();
     if (findErr || !row) throw clientError("Registro de upload não encontrado.");
     if (row.user_id !== context.userId) throw clientError("Registro de upload não encontrado.");
     if (row.status === "uploaded") return { id: row.id };
     if (row.status !== "pending") throw clientError("Upload em estado inválido.");
+
+    // Expiração explícita: recusa e marca como expirado.
+    if (isUploadExpired(row.upload_expires_at)) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin
+        .from("project_files")
+        .update({ status: "expired" })
+        .eq("id", row.id)
+        .eq("status", "pending");
+      throw clientError("Upload expirado. Envie o arquivo novamente.");
+    }
 
     const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
@@ -204,11 +228,30 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
       throw clientError("Não foi possível confirmar o upload.");
     }
     const found = (listed ?? []).find((o) => o.name === objectName);
-    if (!found) throw clientError("Upload não encontrado no armazenamento.");
+    const meta = (found?.metadata ?? null) as { size?: number; mimetype?: string } | null;
+
+    const validation = validateStorageObject({
+      found: Boolean(found),
+      meta,
+      expectedSize: row.file_size,
+      expectedMime: row.mime_type,
+    });
+    if (validation === "not_found") {
+      throw clientError("Upload não encontrado no armazenamento.");
+    }
+    if (validation === "empty") {
+      throw clientError("Upload vazio no armazenamento.");
+    }
+    if (validation === "size_mismatch") {
+      throw clientError("Tamanho do arquivo divergente do declarado.");
+    }
+    if (validation === "mime_mismatch") {
+      throw clientError("Tipo do arquivo divergente do declarado.");
+    }
 
     const { error: updErr } = await supabaseAdmin
       .from("project_files")
-      .update({ status: "uploaded" })
+      .update({ status: "uploaded", upload_expires_at: null })
       .eq("id", row.id)
       .eq("status", "pending");
     if (updErr) {
