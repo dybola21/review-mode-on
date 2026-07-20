@@ -372,6 +372,7 @@ export async function runJob(
     });
   } finally {
     clearTimeout(wallTimer);
+    clearInterval(heartbeatInterval);
     cancel.removeEventListener("abort", shutdownForward);
     try {
       await fs.rm(jobRoot, { recursive: true, force: true });
