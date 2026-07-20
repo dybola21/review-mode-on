@@ -438,6 +438,26 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         .eq("id", jobId);
     };
 
+    const cleanupJobArtifactsSafely = async () => {
+      try {
+        const prefix = `${context.userId}/${data.project_id}/${jobId}`;
+        const { data: listed } = await supabaseAdmin.storage
+          .from("render-outputs")
+          .list(prefix, { limit: 1000 });
+        const paths = (listed ?? []).map((o) => `${prefix}/${o.name}`);
+        if (paths.length > 0) {
+          await supabaseAdmin.storage.from("render-outputs").remove(paths);
+        }
+      } catch (e) {
+        console.error("[submitRenderJob] cleanup storage", e);
+      }
+      try {
+        await supabaseAdmin.from("render_output_targets").delete().eq("render_job_id", jobId);
+      } catch (e) {
+        console.error("[submitRenderJob] cleanup targets", e);
+      }
+    };
+
     // 7) Pre-create output targets (server-owned paths & IDs)
     type Target = {
       workerOutputId: string;
