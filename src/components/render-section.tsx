@@ -58,9 +58,9 @@ export function RenderSection({ projectId }: { projectId: string }) {
     queryKey: ["render-diagnostics", projectId],
     queryFn: () => diagFn({ data: { project_id: projectId } }),
     enabled: !!job.data && ACTIVE.has(job.data.status),
-    refetchInterval: (q) => {
+    refetchInterval: () => {
       const s = job.data?.status;
-      return s && ACTIVE.has(s) ? 4000 : q.state.data ? false : false;
+      return s && ACTIVE.has(s) ? 4000 : false;
     },
   });
 
@@ -160,8 +160,13 @@ export function RenderSection({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {diagnostics.data && ACTIVE.has(job.data?.status ?? "") && (
-        <DiagnosticsBlock d={diagnostics.data} />
+      {isActive && (
+        <DiagnosticsBlock
+          state={diagnostics.data}
+          isLoading={diagnostics.isPending || diagnostics.isFetching}
+          isError={diagnostics.isError}
+          onRefresh={() => diagnostics.refetch()}
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-2">
@@ -199,39 +204,99 @@ function fmtDuration(s: number): string {
   return `${m}m${r.toString().padStart(2, "0")}s`;
 }
 
-function DiagnosticsBlock({ d }: { d: NonNullable<RenderJobDiagnostics> }) {
+const REASON_LABEL: Record<string, string> = {
+  worker_timeout: "Tempo esgotado ao consultar o servidor.",
+  job_not_found: "Job não encontrado.",
+  unauthorized: "Sem permissão para consultar diagnóstico.",
+  worker_unavailable: "Servidor de processamento indisponível.",
+  invalid_response: "Resposta inválida do servidor.",
+  missing_worker_binding: "Servidor de processamento não configurado.",
+};
+
+function DiagnosticsBlock({
+  state,
+  isLoading,
+  isError,
+  onRefresh,
+}: {
+  state: RenderJobDiagnostics | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  onRefresh: () => void;
+}) {
   const title = "Diagnóstico";
-  let detail = "";
-  if (d.status === "queued" && d.queuePosition != null) {
-    detail = `Na fila — posição ${d.queuePosition}`;
-  } else if (d.stage === "downloading") {
-    detail = `Baixando entradas — ${fmtDuration(d.elapsedSeconds)}`;
-  } else if (d.stage === "preparing") {
-    detail = `Preparando template — ${fmtDuration(d.elapsedSeconds)}`;
-  } else if (d.stage === "rendering") {
-    detail = `Renderizando — ${fmtDuration(d.elapsedSeconds)}`;
-  } else if (d.stage === "uploading") {
-    detail = `Upload — ${d.progress}%`;
-  } else if (d.stage === "claimed") {
-    detail = `Iniciando — ${fmtDuration(d.elapsedSeconds)}`;
+
+  let body: React.ReactNode;
+  if (!state && isLoading) {
+    body = (
+      <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…
+      </p>
+    );
+  } else if (isError || !state) {
+    body = <p className="mt-1 text-sm text-destructive">Não foi possível carregar o diagnóstico.</p>;
+  } else if (!state.ok) {
+    body = (
+      <p className="mt-1 text-sm text-amber-500">
+        {REASON_LABEL[state.reason] ?? "Diagnóstico indisponível."}
+      </p>
+    );
   } else {
-    detail = `${d.stage} — ${fmtDuration(d.elapsedSeconds)}`;
+    const d = state.data;
+    let detail = "";
+    if (d.status === "queued" && d.queuePosition != null) {
+      detail = `Na fila — posição ${d.queuePosition}`;
+    } else if (d.stage === "downloading") {
+      detail = `Baixando entradas — ${fmtDuration(d.elapsedSeconds)}`;
+    } else if (d.stage === "preparing") {
+      detail = `Preparando template — ${fmtDuration(d.elapsedSeconds)}`;
+    } else if (d.stage === "rendering") {
+      detail = `Renderizando — ${fmtDuration(d.elapsedSeconds)}`;
+    } else if (d.stage === "uploading") {
+      detail = `Upload — ${d.progress}%`;
+    } else if (d.stage === "claimed") {
+      detail = `Iniciando — ${fmtDuration(d.elapsedSeconds)}`;
+    } else {
+      detail = `${d.stage} — ${fmtDuration(d.elapsedSeconds)}`;
+    }
+
+    const hbAgeSec = d.heartbeatAt
+      ? Math.max(0, Math.round((Date.now() - Date.parse(d.heartbeatAt)) / 1000))
+      : null;
+    const stale = hbAgeSec != null && hbAgeSec >= 30;
+
+    body = (
+      <>
+        <p className="mt-1 text-sm text-foreground">{detail}</p>
+        {stale && <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>}
+        {d.lastErrorCode && (
+          <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>
+        )}
+      </>
+    );
   }
 
-  const hbAgeSec = d.heartbeatAt
-    ? Math.max(0, Math.round((Date.now() - Date.parse(d.heartbeatAt)) / 1000))
-    : null;
-  const stale = hbAgeSec != null && hbAgeSec >= 30;
+  const attempt =
+    state && state.ok ? `tentativa ${state.data.attemptCount}` : isLoading ? "…" : "—";
 
   return (
     <div className="rounded-md border border-border/60 bg-surface/60 p-3 text-xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-muted-foreground">{title}</span>
-        <span className="text-muted-foreground">tentativa {d.attemptCount}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground">{attempt}</span>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isLoading}
+            className="inline-flex items-center gap-1 rounded border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-surface disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+            Atualizar diagnóstico
+          </button>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-foreground">{detail}</p>
-      {stale && <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>}
-      {d.lastErrorCode && <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>}
+      {body}
     </div>
   );
 }

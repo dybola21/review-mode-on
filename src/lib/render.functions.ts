@@ -209,7 +209,7 @@ export const listRenderOutputs = createServerFn({ method: "GET" })
 // via RLS. Never exposes worker URL / API key / payload.
 // -----------------------------------------------------------------------
 
-export type RenderJobDiagnostics = {
+export type RenderJobDiagnosticsData = {
   status: string;
   stage: string;
   progress: number;
@@ -222,7 +222,19 @@ export type RenderJobDiagnostics = {
   elapsedSeconds: number;
   lastErrorCode: string | null;
   running: boolean;
-} | null;
+};
+
+export type RenderDiagnosticsReason =
+  | "worker_timeout"
+  | "job_not_found"
+  | "unauthorized"
+  | "worker_unavailable"
+  | "invalid_response"
+  | "missing_worker_binding";
+
+export type RenderJobDiagnostics =
+  | { ok: true; data: RenderJobDiagnosticsData }
+  | { ok: false; reason: RenderDiagnosticsReason };
 
 const DIAG_ACTIVE = new Set(["queued", "submitting", "processing"]);
 
@@ -237,14 +249,14 @@ export const getRenderJobDiagnostics = createServerFn({ method: "POST" })
       .eq("project_id", data.project_id)
       .order("created_at", { ascending: false })
       .limit(1);
-    if (error) return null;
+    if (error) return { ok: false, reason: "job_not_found" };
     const job = rows?.[0];
-    if (!job || !job.worker_job_id) return null;
-    if (!DIAG_ACTIVE.has(job.status)) return null;
+    if (!job || !job.worker_job_id) return { ok: false, reason: "job_not_found" };
+    if (!DIAG_ACTIVE.has(job.status)) return { ok: false, reason: "job_not_found" };
 
     const workerUrl = process.env.VIDEO_WORKER_URL;
     const workerKey = process.env.VIDEO_WORKER_API_KEY;
-    if (!workerUrl || !workerKey) return null;
+    if (!workerUrl || !workerKey) return { ok: false, reason: "missing_worker_binding" };
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -259,13 +271,23 @@ export const getRenderJobDiagnostics = createServerFn({ method: "POST" })
         signal: ctrl.signal,
       });
       clearTimeout(timer);
-      if (res.status !== 200) return null;
-      const body = (await res.json().catch(() => null)) as RenderJobDiagnostics;
-      if (!body || typeof body !== "object") return null;
-      return body;
-    } catch {
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, reason: "unauthorized" };
+      }
+      if (res.status === 404) return { ok: false, reason: "job_not_found" };
+      if (res.status >= 500) return { ok: false, reason: "worker_unavailable" };
+      if (res.status !== 200) return { ok: false, reason: "invalid_response" };
+      const body = (await res.json().catch(() => null)) as RenderJobDiagnosticsData | null;
+      if (!body || typeof body !== "object" || typeof body.stage !== "string") {
+        return { ok: false, reason: "invalid_response" };
+      }
+      return { ok: true, data: body };
+    } catch (e) {
       clearTimeout(timer);
-      return null;
+      if (e instanceof Error && e.name === "AbortError") {
+        return { ok: false, reason: "worker_timeout" };
+      }
+      return { ok: false, reason: "worker_unavailable" };
     }
   });
 
