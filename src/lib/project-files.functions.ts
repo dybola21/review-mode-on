@@ -271,6 +271,14 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
 
+    // Path invariant: server-owned storage_path must start with
+    // `${userId}/${projectId}/${fileId}/` and have no traversal / double
+    // slash / backslash.
+    if (!isValidStoragePath(row.storage_path, context.userId, row.project_id, row.id)) {
+      console.error("[confirmProjectFile] invalid storage_path", row.storage_path);
+      throw clientError("Caminho de armazenamento inválido.");
+    }
+
     const parts = row.storage_path.split("/");
     const parentPath = parts.slice(0, -1).join("/");
     const objectName = parts[parts.length - 1];
@@ -300,18 +308,27 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     if (validation === "size_mismatch") {
       throw clientError("Tamanho do arquivo divergente do declarado.");
     }
+    if (validation === "mime_missing") {
+      throw clientError("Tipo do arquivo ausente no armazenamento.");
+    }
     if (validation === "mime_mismatch") {
       throw clientError("Tipo do arquivo divergente do declarado.");
     }
 
-    const { error: updErr } = await supabaseAdmin
+    // Transição atômica pending → uploaded. Se nenhuma linha muda
+    // (corrida com expiração / outra transição), recusa com erro seguro.
+    const { data: updated, error: updErr } = await supabaseAdmin
       .from("project_files")
       .update({ status: "uploaded", upload_expires_at: null })
       .eq("id", row.id)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id");
     if (updErr) {
       console.error("[confirmProjectFile] update", updErr);
       throw clientError("Não foi possível registrar o arquivo.");
+    }
+    if (!updated || updated.length !== 1) {
+      throw clientError("Conflito ao confirmar o upload. Envie novamente.");
     }
     return { id: row.id };
   });
