@@ -122,6 +122,7 @@ export async function runJob(
   });
 
   try {
+    db.setStage(row.worker_job_id, "downloading");
     const localById = new Map<string, { path: string; input: InputFile }>();
 
     for (const inp of payload.inputFiles) {
@@ -175,6 +176,7 @@ export async function runJob(
       headerImageNaturalSize = null;
     }
 
+    db.setStage(row.worker_job_id, "preparing");
     const overlay = await buildTemplateOverlay({
       width: OUT_W,
       height: OUT_H,
