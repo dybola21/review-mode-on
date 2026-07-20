@@ -617,6 +617,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     // Cleanup helper (moved above; see `cleanupJobArtifactsSafely`).
 
+    logSubmit("worker_request_started", { projectId: data.project_id, jobId });
+
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
     let workerJobId: string | null = null;
@@ -640,11 +642,17 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         throw new Error("invalid worker response");
       }
       workerJobId = body.workerJobId;
+      logSubmit("worker_accepted", { projectId: data.project_id, jobId });
     } catch (err) {
       clearTimeout(timer);
       console.error("[submitRenderJob] worker", err);
       await failJob("worker_unreachable", "Servidor temporariamente indisponível.");
-      await cleanupJobArtifacts();
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "worker_unreachable",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
