@@ -13,12 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  confirmProjectFile,
-  deleteProjectFile,
-  listProjectFiles,
-  prepareProjectFileUpload,
-} from "@/lib/project-files.functions";
+import { deleteProjectFile, listProjectFiles } from "@/lib/project-files.functions";
+import { useProjectFileUploader } from "@/lib/project-file-upload";
 import type { getAppSettings } from "@/lib/app-settings.functions";
 
 import { extensionMatchesMime, sanitizeFileName } from "@/lib/project-schemas";
@@ -64,9 +60,8 @@ export function ProjectFilesSection({
 }) {
   const qc = useQueryClient();
   const listFn = useServerFn(listProjectFiles);
-  const prepareFn = useServerFn(prepareProjectFileUpload);
-  const confirmFn = useServerFn(confirmProjectFile);
   const deleteFn = useServerFn(deleteProjectFile);
+  const uploader = useProjectFileUploader();
 
   const filesQuery = useQuery({
     queryKey: ["project-files", projectId],
@@ -95,36 +90,12 @@ export function ProjectFilesSection({
       abort: controller,
     });
     try {
-      const prepared = await prepareFn({
-        data: {
-          project_id: projectId,
-          file_name: item.file.name,
-          mime_type: item.file.type,
-          file_size: item.file.size,
-          file_type: item.file_type,
-        },
-      });
-
-      updateItem(item.key, { progress: 15 });
-
-      // Upload via signed URL usando fetch (com progresso aproximado via XHR)
-      const uploaded = await xhrUpload({
-        url: prepared.signed_url,
+      await uploader({
+        projectId,
         file: item.file,
+        fileType: item.file_type,
         signal: controller.signal,
-        onProgress: (p) =>
-          updateItem(item.key, {
-            progress: 15 + Math.floor(p * 0.75),
-          }),
-      });
-      if (!uploaded) throw new Error("Upload cancelado.");
-
-      updateItem(item.key, { status: "confirming", progress: 92 });
-
-      await confirmFn({
-        data: {
-          file_id: prepared.file_id,
-        },
+        onProgress: (p) => updateItem(item.key, { status: p.phase, progress: p.percent }),
       });
 
       updateItem(item.key, { status: "done", progress: 100 });
@@ -329,37 +300,6 @@ export function ProjectFilesSection({
       </div>
     </div>
   );
-}
-
-// Upload com progresso real via XHR
-function xhrUpload({
-  url,
-  file,
-  signal,
-  onProgress,
-}: {
-  url: string;
-  file: File;
-  signal: AbortSignal;
-  onProgress: (p: number) => void;
-}): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", file.type);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve(true);
-      else reject(new Error(`Falha no upload (${xhr.status}).`));
-    };
-    xhr.onerror = () => reject(new Error("Erro de rede no upload."));
-    xhr.onabort = () => resolve(false);
-    signal.addEventListener("abort", () => xhr.abort(), { once: true });
-    xhr.send(file);
-  });
 }
 
 // Hook útil para evitar hydration mismatch (não usado no arquivo por ora)

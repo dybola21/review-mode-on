@@ -1,29 +1,58 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, RefreshCw, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
+import type { getAppSettings } from "@/lib/app-settings.functions";
+import { useProjectFileUploader } from "@/lib/project-file-upload";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
 import { getProjectFilePreviewUrl, listProjectFiles } from "@/lib/project-files.functions";
 import {
   DEFAULT_TEMPLATE_SETTINGS,
+  extensionMatchesMime,
+  sanitizeFileName,
   templateSettingsSchema,
   type TemplateSettings,
 } from "@/lib/project-schemas";
+
+type Settings = Awaited<ReturnType<typeof getAppSettings>>;
 
 const MIN_HEADER_RATIO = 0.2;
 const MAX_HEADER_RATIO = 0.4;
 const DEFAULT_HEADER_RATIO = 0.335;
 
-export function TemplateEditor({ projectId, initial }: { projectId: string; initial: unknown }) {
+// Formatos permitidos para arte do cabeçalho.
+const HEADER_ART_MIMES = ["image/png", "image/jpeg", "image/webp"];
+
+type HeaderUpload = {
+  key: string;
+  file: File;
+  status: "uploading" | "confirming" | "done" | "error" | "canceled";
+  progress: number;
+  error?: string;
+  abort?: AbortController;
+};
+
+export function TemplateEditor({
+  projectId,
+  initial,
+  settings,
+}: {
+  projectId: string;
+  initial: unknown;
+  settings: Settings;
+}) {
   const parsed = templateSettingsSchema.safeParse(initial);
   const [tpl, setTpl] = useState<TemplateSettings>(
     parsed.success ? parsed.data : DEFAULT_TEMPLATE_SETTINGS,
   );
 
+  const qc = useQueryClient();
   const saveFn = useServerFn(updateTemplateSettings);
   const listFn = useServerFn(listProjectFiles);
   const previewFn = useServerFn(getProjectFilePreviewUrl);
+  const uploader = useProjectFileUploader();
 
   const filesQuery = useQuery({
     queryKey: ["project-files", projectId],
@@ -96,6 +125,87 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
     });
   }
 
+  // -------- Upload direto da arte do cabeçalho --------
+  const [headerUpload, setHeaderUpload] = useState<HeaderUpload | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function validateHeaderFile(file: File): string | null {
+    if (file.size > settings.max_file_size_mb * 1024 * 1024) {
+      return `Arquivo maior que ${settings.max_file_size_mb} MB.`;
+    }
+    if (!HEADER_ART_MIMES.includes(file.type)) {
+      return "Envie PNG, JPG/JPEG ou WebP.";
+    }
+    const safe = sanitizeFileName(file.name);
+    if (!extensionMatchesMime(safe, file.type)) {
+      return "A extensão não corresponde ao tipo do arquivo.";
+    }
+    const totalFiles =
+      (filesQuery.data?.length ?? 0) + (headerUpload && headerUpload.status !== "done" ? 1 : 0);
+    if (totalFiles >= settings.max_files_per_project) {
+      return `Limite de ${settings.max_files_per_project} arquivos atingido.`;
+    }
+    return null;
+  }
+
+  async function startHeaderUpload(file: File) {
+    const err = validateHeaderFile(file);
+    if (err) {
+      toast.error(err);
+      return;
+    }
+    const controller = new AbortController();
+    const item: HeaderUpload = {
+      key: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      file,
+      status: "uploading",
+      progress: 5,
+      abort: controller,
+    };
+    setHeaderUpload(item);
+    try {
+      const { file_id } = await uploader({
+        projectId,
+        file,
+        fileType: "template_asset",
+        signal: controller.signal,
+        onProgress: (p) =>
+          setHeaderUpload((prev) =>
+            prev && prev.key === item.key
+              ? { ...prev, status: p.phase as HeaderUpload["status"], progress: p.percent }
+              : prev,
+          ),
+      });
+
+      setHeaderUpload((prev) =>
+        prev && prev.key === item.key ? { ...prev, status: "done", progress: 100 } : prev,
+      );
+
+      // Atualizar listagens e selecionar automaticamente a nova arte.
+      await qc.invalidateQueries({ queryKey: ["project-files", projectId] });
+      qc.invalidateQueries({ queryKey: ["project-rights", projectId] });
+      handleHeaderSelect(file_id);
+      toast.success("Arte do cabeçalho enviada.");
+
+      setTimeout(() => {
+        setHeaderUpload((prev) => (prev && prev.key === item.key ? null : prev));
+      }, 800);
+    } catch (e) {
+      if (controller.signal.aborted) {
+        setHeaderUpload((prev) =>
+          prev && prev.key === item.key ? { ...prev, status: "canceled", progress: 0 } : prev,
+        );
+        return;
+      }
+      const msg = e instanceof Error ? e.message : "Erro no upload";
+      setHeaderUpload((prev) =>
+        prev && prev.key === item.key ? { ...prev, status: "error", error: msg } : prev,
+      );
+      toast.error(msg);
+    }
+  }
+
   const headerRatioPct = Math.round(tpl.header_height_ratio * 100);
   const canSave = Boolean(tpl.header_image_file_id);
 
@@ -112,40 +222,148 @@ export function TemplateEditor({ projectId, initial }: { projectId: string; init
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">
           <Field label="Arte do cabeçalho (obrigatória)">
-            {imageFiles.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Envie uma imagem no bloco de arquivos para poder selecioná-la como arte do
-                cabeçalho. Recomendado: 1080×640 px, com textos dentro de uma margem segura.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <select
-                  className="input w-full"
-                  value={tpl.header_image_file_id ?? ""}
-                  onChange={(e) => handleHeaderSelect(e.target.value)}
-                >
-                  <option value="">— Selecione a arte —</option>
-                  {imageFiles.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.file_name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-foreground">
-                  Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para evitar
-                  corte no modo &quot;Preencher&quot;.
-                </p>
-                {tpl.header_image_file_id && headerUrl && (
-                  <div className="rounded-md border border-border bg-surface p-2">
-                    <img
-                      src={headerUrl}
-                      alt="Arte do cabeçalho"
-                      className="max-h-24 w-full object-contain"
+            <div className="space-y-3">
+              {/* Slot de upload direto */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) startHeaderUpload(f);
+                }}
+                className={`rounded-lg border-2 border-dashed p-4 text-center text-sm transition-colors ${
+                  dragOver
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-surface/50 text-muted-foreground"
+                }`}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  <p className="text-xs">
+                    Arraste a arte aqui ou clique para selecionar (PNG, JPG ou WebP).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={
+                      headerUpload?.status === "uploading" || headerUpload?.status === "confirming"
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md gradient-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Enviar arte do cabeçalho
+                  </button>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept={HEADER_ART_MIMES.join(",")}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) startHeaderUpload(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Progresso do upload atual */}
+              {headerUpload && (
+                <div className="rounded-md border border-border bg-surface p-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="flex-1 truncate">{headerUpload.file.name}</span>
+                    {(headerUpload.status === "uploading" ||
+                      headerUpload.status === "confirming") && (
+                      <button
+                        type="button"
+                        onClick={() => headerUpload.abort?.abort()}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                    {headerUpload.status === "error" && (
+                      <button
+                        type="button"
+                        onClick={() => startHeaderUpload(headerUpload.file)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Tentar novamente"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full transition-all ${
+                        headerUpload.status === "error"
+                          ? "bg-destructive"
+                          : headerUpload.status === "done"
+                            ? "bg-emerald-500"
+                            : "bg-primary"
+                      }`}
+                      style={{ width: `${headerUpload.progress}%` }}
                     />
                   </div>
-                )}
-              </div>
-            )}
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {headerUpload.status === "uploading" && `Enviando ${headerUpload.progress}%`}
+                    {headerUpload.status === "confirming" && "Confirmando…"}
+                    {headerUpload.status === "done" && "Concluído"}
+                    {headerUpload.status === "canceled" && "Cancelado"}
+                    {headerUpload.status === "error" &&
+                      `Erro: ${headerUpload.error ?? "desconhecido"}`}
+                  </p>
+                </div>
+              )}
+
+              {/* Seletor de imagens já enviadas */}
+              {filesQuery.isLoading ? (
+                <div className="flex justify-center py-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : imageFiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma imagem enviada ainda. Use o slot acima ou o bloco de arquivos do projeto.
+                  Recomendado: 1080×640 px, com textos dentro de uma margem segura.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Ou selecione uma imagem já enviada
+                  </label>
+                  <select
+                    className="input w-full"
+                    value={tpl.header_image_file_id ?? ""}
+                    onChange={(e) => handleHeaderSelect(e.target.value)}
+                  >
+                    <option value="">— Selecione a arte —</option>
+                    {imageFiles.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.file_name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para evitar
+                    corte no modo &quot;Preencher&quot;.
+                  </p>
+                  {tpl.header_image_file_id && headerUrl && (
+                    <div className="rounded-md border border-border bg-surface p-2">
+                      <img
+                        src={headerUrl}
+                        alt="Arte do cabeçalho"
+                        className="max-h-24 w-full object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
