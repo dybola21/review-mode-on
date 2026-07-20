@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 // Canonical schemas — must match src/lib/project-schemas.ts on the app.
-// Music is intentionally NOT part of this contract in the current version.
+// Contract v2: 1 header art + N source videos -> N outputs (1:1). No variations.
 
 export const inputFileSchema = z
   .object({
@@ -19,19 +19,18 @@ export const outputTargetSchema = z
     fileName: z.string().min(1).max(255),
     mimeType: z.string().min(1).max(127),
     signedUploadUrl: z.string().url(),
+    // v2: each output is bound to exactly one source_video input.
+    sourceFileId: z.string().uuid(),
   })
   .strict();
 
-// Canonical template — mirrors the frontend contract exactly.
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "invalid hex color");
 
 export const templateSettingsSchema = z
   .object({
-    // Novo layout: arte pronta no cabeçalho + vídeo abaixo.
     header_image_file_id: z.string().uuid().nullable().optional(),
     header_image_fit: z.enum(["cover", "contain"]).default("cover"),
-    // Campos legados — mantidos por compatibilidade, ignorados quando
-    // header_image_file_id existir.
+    // Legacy — accepted for backward compat, ignored when header art is set.
     page_name: z.string().max(80).default(""),
     identifier: z.string().max(60).default(""),
     headline: z.string().max(160).default(""),
@@ -43,7 +42,7 @@ export const templateSettingsSchema = z
       .enum(["top-left", "top-right", "bottom-left", "bottom-right"])
       .default("bottom-right"),
     watermark_opacity: z.number().min(0).max(1).default(0.6),
-    header_height_ratio: z.number().min(0).max(0.4).default(0.335),
+    header_height_ratio: z.number().min(0.2).max(0.4).default(0.335),
     header_image_position_x: z.number().min(0).max(1).default(0.5),
     header_image_position_y: z.number().min(0).max(1).default(0.5),
   })
@@ -51,40 +50,17 @@ export const templateSettingsSchema = z
 
 export type TemplateSettings = z.infer<typeof templateSettingsSchema>;
 
-// Canonical variations — {min, max} shape used by the frontend.
-const minMax = (min: number, max: number) =>
-  z
-    .object({
-      min: z.number().finite().min(min).max(max),
-      max: z.number().finite().min(min).max(max),
-    })
-    .refine((v) => v.min <= v.max, { message: "min must be <= max" });
-
-export const variationSettingsSchema = z
-  .object({
-    brightness: minMax(-0.2, 0.2),
-    contrast: minMax(0.8, 1.2),
-    saturation: minMax(0.8, 1.2),
-    // Temperature in UI units (-15..15). Conversion to ffmpeg happens later.
-    temperature: minMax(-15, 15),
-    scale: minMax(1.0, 1.1),
-    watermark_position_jitter: z.boolean().default(false),
-    variation_count: z.number().int().min(1).max(100).default(1),
-  })
-  .strict();
-
-export type VariationSettings = z.infer<typeof variationSettingsSchema>;
+export const CONTRACT_VERSION = 2 as const;
 
 export const jobPayloadSchema = z
   .object({
+    contractVersion: z.literal(CONTRACT_VERSION),
     jobId: z.string().uuid(),
     projectId: z.string().uuid(),
     callbackUrl: z.string().url(),
-    inputFiles: z.array(inputFileSchema).min(1).max(200),
+    inputFiles: z.array(inputFileSchema).min(1).max(600),
     outputTargets: z.array(outputTargetSchema).min(1).max(400),
     templateSettings: templateSettingsSchema,
-    variationSettings: variationSettingsSchema,
-    variationCount: z.number().int().min(1).max(100),
     uploadTtlSeconds: z
       .number()
       .int()
@@ -92,9 +68,44 @@ export const jobPayloadSchema = z
       .max(24 * 3600),
   })
   .strict()
-  .refine((p) => p.variationCount === p.variationSettings.variation_count, {
-    message: "variationCount must equal variationSettings.variation_count",
-    path: ["variationCount"],
+  .superRefine((p, ctx) => {
+    const sourceIds = new Set(
+      p.inputFiles.filter((f) => f.fileType === "source_video").map((f) => f.fileId),
+    );
+    if (sourceIds.size === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "at least one source_video required",
+        path: ["inputFiles"],
+      });
+      return;
+    }
+    if (p.outputTargets.length !== sourceIds.size) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "outputTargets.length must equal number of source_video inputs",
+        path: ["outputTargets"],
+      });
+    }
+    const seenSources = new Set<string>();
+    for (let i = 0; i < p.outputTargets.length; i++) {
+      const t = p.outputTargets[i]!;
+      if (!sourceIds.has(t.sourceFileId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "sourceFileId must reference an input source_video",
+          path: ["outputTargets", i, "sourceFileId"],
+        });
+      }
+      if (seenSources.has(t.sourceFileId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "each source_video must map to exactly one output",
+          path: ["outputTargets", i, "sourceFileId"],
+        });
+      }
+      seenSources.add(t.sourceFileId);
+    }
   });
 
 export type JobPayload = z.infer<typeof jobPayloadSchema>;
