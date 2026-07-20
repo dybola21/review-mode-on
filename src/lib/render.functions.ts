@@ -16,6 +16,31 @@ function clientError(msg: string): Error {
   return new Error(msg);
 }
 
+type SubmitStage =
+  | "validation_started"
+  | "job_created"
+  | "targets_created"
+  | "signed_urls_created"
+  | "worker_request_started"
+  | "worker_accepted"
+  | "submission_failed";
+
+function logSubmit(
+  stage: SubmitStage,
+  fields: { projectId: string; jobId?: string | null; code?: string },
+): void {
+  // Structured, secret-free log line for the render submission pipeline.
+  console.log(
+    JSON.stringify({
+      event: "submitRenderJob",
+      stage,
+      projectId: fields.projectId,
+      jobId: fields.jobId ?? null,
+      code: fields.code ?? null,
+    }),
+  );
+}
+
 const ACTIVE_STATUSES = ["queued", "submitting", "processing"] as const;
 const SIGNED_INPUT_TTL_SECONDS = 60 * 60; // 1h
 const SIGNED_UPLOAD_TTL_SECONDS = 60 * 60 * 2; // 2h — Supabase default upper bound
@@ -227,6 +252,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
     const callbackUrl = `${baseUrl}/api/public/worker-webhook`;
 
+    logSubmit("validation_started", { projectId: data.project_id });
+
     // 1) Project
     const { data: project, error: projectErr } = await context.supabase
       .from("projects")
@@ -389,8 +416,13 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         .single();
       if (createErr || !created) throw new Error("insert failed");
       jobId = created.id;
+      logSubmit("job_created", { projectId: data.project_id, jobId });
     } catch (err) {
       console.error("[submitRenderJob] insert", err);
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        code: "job_insert_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
@@ -404,6 +436,26 @@ export const submitRenderJob = createServerFn({ method: "POST" })
           completed_at: new Date().toISOString(),
         })
         .eq("id", jobId);
+    };
+
+    const cleanupJobArtifactsSafely = async () => {
+      try {
+        const prefix = `${context.userId}/${data.project_id}/${jobId}`;
+        const { data: listed } = await supabaseAdmin.storage
+          .from("render-outputs")
+          .list(prefix, { limit: 1000 });
+        const paths = (listed ?? []).map((o) => `${prefix}/${o.name}`);
+        if (paths.length > 0) {
+          await supabaseAdmin.storage.from("render-outputs").remove(paths);
+        }
+      } catch (e) {
+        console.error("[submitRenderJob] cleanup storage", e);
+      }
+      try {
+        await supabaseAdmin.from("render_output_targets").delete().eq("render_job_id", jobId);
+      } catch (e) {
+        console.error("[submitRenderJob] cleanup targets", e);
+      }
     };
 
     // 7) Pre-create output targets (server-owned paths & IDs)
@@ -453,9 +505,15 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         })),
       );
       if (tErr) throw new Error(`targets insert: ${tErr.message}`);
+      logSubmit("targets_created", { projectId: data.project_id, jobId });
     } catch (err) {
       console.error("[submitRenderJob] targets", err);
       await failJob("targets_failed", "Falha ao preparar destinos.");
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "targets_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
@@ -497,6 +555,12 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     } catch (err) {
       console.error("[submitRenderJob] sign inputs", err);
       await failJob("sign_failed", "Falha ao preparar arquivos.");
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "sign_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
@@ -526,8 +590,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     } catch (err) {
       console.error("[submitRenderJob] sign uploads", err);
       await failJob("sign_upload_failed", "Falha ao preparar destinos.");
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "sign_upload_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
+
+    logSubmit("signed_urls_created", { projectId: data.project_id, jobId });
 
     // 10) Send job to worker. templateSettings references assets by
     //     fileId only — never storagePath or signed URL.
@@ -543,28 +615,9 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       uploadTtlSeconds: SIGNED_UPLOAD_TTL_SECONDS,
     };
 
-    // Cleanup helper for definitive POST /jobs failure. Removes only
-    // this job's targets and any partial storage objects under the
-    // job prefix; never touches other jobs.
-    const cleanupJobArtifacts = async () => {
-      try {
-        const prefix = `${context.userId}/${data.project_id}/${jobId}`;
-        const { data: listed } = await supabaseAdmin.storage
-          .from("render-outputs")
-          .list(prefix, { limit: 1000 });
-        const paths = (listed ?? []).map((o) => `${prefix}/${o.name}`);
-        if (paths.length > 0) {
-          await supabaseAdmin.storage.from("render-outputs").remove(paths);
-        }
-      } catch (e) {
-        console.error("[submitRenderJob] cleanup storage", e);
-      }
-      try {
-        await supabaseAdmin.from("render_output_targets").delete().eq("render_job_id", jobId);
-      } catch (e) {
-        console.error("[submitRenderJob] cleanup targets", e);
-      }
-    };
+    // Cleanup helper (moved above; see `cleanupJobArtifactsSafely`).
+
+    logSubmit("worker_request_started", { projectId: data.project_id, jobId });
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
@@ -589,11 +642,17 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         throw new Error("invalid worker response");
       }
       workerJobId = body.workerJobId;
+      logSubmit("worker_accepted", { projectId: data.project_id, jobId });
     } catch (err) {
       clearTimeout(timer);
       console.error("[submitRenderJob] worker", err);
       await failJob("worker_unreachable", "Servidor temporariamente indisponível.");
-      await cleanupJobArtifacts();
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "worker_unreachable",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 

@@ -7,12 +7,67 @@ import {
   RIGHTS_CONFIRMATION_VERSION,
 } from "./project-schemas";
 import { DEFAULT_APP_SETTINGS } from "./app-settings.functions";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 
 function clientError(msg: string): Error {
   return new Error(msg);
 }
 
 const projectIdSchema = z.object({ project_id: z.string().uuid() });
+
+/**
+ * Verifies that the authenticated user owns `projectId` using the RLS-scoped
+ * client. Returns only when RLS lets the caller see the row. This is the
+ * gate BEFORE we escalate to the service-role client for the write.
+ */
+export async function assertProjectOwnership(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: { from: (t: string) => any },
+  projectId: string,
+): Promise<void> {
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error || !data) throw clientError("Projeto não encontrado.");
+}
+
+/**
+ * Applies a strictly allow-listed patch to `projects` using service_role.
+ * Never trusts the client for user_id, status, or any other server-controlled
+ * field. Requires exactly one row updated.
+ */
+export async function applyOwnedProjectPatch(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabaseAdmin: { from: (t: string) => any },
+  args: {
+    projectId: string;
+    userId: string;
+    patch: Pick<
+      TablesUpdate<"projects">,
+      "template_settings" | "variation_settings" | "variation_count"
+    >;
+  },
+): Promise<void> {
+  const allowed: Record<string, unknown> = {};
+  if ("template_settings" in args.patch) allowed.template_settings = args.patch.template_settings;
+  if ("variation_settings" in args.patch)
+    allowed.variation_settings = args.patch.variation_settings;
+  if ("variation_count" in args.patch) allowed.variation_count = args.patch.variation_count;
+  if (Object.keys(allowed).length === 0) throw clientError("Nada para atualizar.");
+
+  const { data, error } = await supabaseAdmin
+    .from("projects")
+    .update(allowed)
+    .eq("id", args.projectId)
+    .eq("user_id", args.userId)
+    .select("id");
+  if (error) throw error;
+  if (!Array.isArray(data) || data.length !== 1) {
+    throw clientError("Projeto não encontrado.");
+  }
+}
 
 const updateTemplateSchema = z.object({
   project_id: z.string().uuid(),
@@ -23,12 +78,17 @@ export const updateTemplateSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => updateTemplateSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { error } = await context.supabase
-      .from("projects")
-      .update({ template_settings: data.template })
-      .eq("id", data.project_id);
-    if (error) {
-      console.error("[updateTemplateSettings]", error);
+    await assertProjectOwnership(context.supabase, data.project_id);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    try {
+      await applyOwnedProjectPatch(supabaseAdmin, {
+        projectId: data.project_id,
+        userId: context.userId,
+        patch: { template_settings: data.template },
+      });
+    } catch (err) {
+      console.error("[updateTemplateSettings]", err);
+      if (err instanceof Error && err.message === "Projeto não encontrado.") throw err;
       throw clientError("Não foi possível salvar o template.");
     }
     return { ok: true };
@@ -44,7 +104,8 @@ export const updateVariationSettings = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => updateVariationsSchema.parse(data))
   .handler(async ({ data, context }) => {
-    // Busca max_variations do app_settings
+    await assertProjectOwnership(context.supabase, data.project_id);
+
     const { data: settingRow } = await context.supabase
       .from("app_settings")
       .select("value")
@@ -61,15 +122,19 @@ export const updateVariationSettings = createServerFn({ method: "POST" })
       throw clientError(parsed.error.issues[0]?.message ?? "Configuração inválida.");
     }
 
-    const { error } = await context.supabase
-      .from("projects")
-      .update({
-        variation_settings: parsed.data,
-        variation_count: parsed.data.variation_count,
-      })
-      .eq("id", data.project_id);
-    if (error) {
-      console.error("[updateVariationSettings]", error);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    try {
+      await applyOwnedProjectPatch(supabaseAdmin, {
+        projectId: data.project_id,
+        userId: context.userId,
+        patch: {
+          variation_settings: parsed.data,
+          variation_count: parsed.data.variation_count,
+        },
+      });
+    } catch (err) {
+      console.error("[updateVariationSettings]", err);
+      if (err instanceof Error && err.message === "Projeto não encontrado.") throw err;
       throw clientError("Não foi possível salvar as variações.");
     }
     return { ok: true };
