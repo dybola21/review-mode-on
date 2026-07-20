@@ -47,6 +47,11 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
+  // Guard the effectively-selected key (including SSR fallback). A
+  // sb_secret_* or service_role JWT must never be used to boot the
+  // public Supabase client.
+  assertSupabaseKeyIsPublishable(SUPABASE_PUBLISHABLE_KEY, "SUPABASE_PUBLISHABLE_KEY");
+
   return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
       fetch: createSupabaseFetch(SUPABASE_PUBLISHABLE_KEY),
