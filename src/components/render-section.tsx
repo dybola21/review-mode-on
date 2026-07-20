@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, Loader2, PlayCircle, RefreshCw, Server } from "lucide-react";
 import { toast } from "sonner";
 import { checkWorkerHealth, getLatestRenderJob, submitRenderJob } from "@/lib/render.functions";
+import { listProjectFiles } from "@/lib/project-files.functions";
 
 const ACTIVE = new Set(["queued", "submitting", "processing"]);
 const FINAL = new Set(["completed", "failed", "cancelled", "expired"]);
@@ -23,12 +24,18 @@ export function RenderSection({ projectId }: { projectId: string }) {
   const healthFn = useServerFn(checkWorkerHealth);
   const jobFn = useServerFn(getLatestRenderJob);
   const submitFn = useServerFn(submitRenderJob);
+  const filesFn = useServerFn(listProjectFiles);
 
   const health = useQuery({
     queryKey: ["worker-health"],
     queryFn: () => healthFn(),
     staleTime: 30_000,
     refetchInterval: 60_000,
+  });
+
+  const files = useQuery({
+    queryKey: ["project-files", projectId],
+    queryFn: () => filesFn({ data: { project_id: projectId } }),
   });
 
   const job = useQuery({
@@ -39,6 +46,10 @@ export function RenderSection({ projectId }: { projectId: string }) {
       return s && ACTIVE.has(s) ? 4000 : false;
     },
   });
+
+  const sourceCount = (files.data ?? []).filter(
+    (f) => f.file_type === "source_video" && f.status === "uploaded",
+  ).length;
 
   const isActive = !!job.data && ACTIVE.has(job.data.status);
 
@@ -53,7 +64,11 @@ export function RenderSection({ projectId }: { projectId: string }) {
   });
 
   const canSubmit =
-    health.data?.configured && health.data?.available && !isActive && !submit.isPending;
+    health.data?.configured &&
+    health.data?.available &&
+    !isActive &&
+    !submit.isPending &&
+    sourceCount > 0;
 
   const workerStatus = !health.data
     ? { icon: Loader2, label: "Verificando servidor…", cls: "text-muted-foreground animate-spin" }
@@ -65,6 +80,11 @@ export function RenderSection({ projectId }: { projectId: string }) {
 
   const WorkerIcon = workerStatus.icon;
 
+  const processedCount =
+    isActive && sourceCount > 0
+      ? Math.min(sourceCount, Math.floor((job.data!.progress / 100) * sourceCount))
+      : 0;
+
   return (
     <div className="surface-card space-y-5 p-6">
       <div className="flex items-start justify-between gap-3">
@@ -73,7 +93,9 @@ export function RenderSection({ projectId }: { projectId: string }) {
             Processamento
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Envie o projeto para gerar as variações editoriais.
+            {sourceCount > 0
+              ? `${sourceCount} ${sourceCount === 1 ? "vídeo enviado" : "vídeos enviados"} → ${sourceCount} ${sourceCount === 1 ? "vídeo de saída" : "vídeos de saída"}.`
+              : "Envie ao menos um vídeo para processar."}
           </p>
         </div>
         <div className={`flex items-center gap-1.5 text-xs ${workerStatus.cls}`}>
@@ -91,12 +113,20 @@ export function RenderSection({ projectId }: { projectId: string }) {
             </span>
           </div>
           {ACTIVE.has(job.data.status) && (
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full gradient-primary transition-all"
-                style={{ width: `${job.data.progress}%` }}
-              />
-            </div>
+            <>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-border">
+                <div
+                  className="h-full gradient-primary transition-all"
+                  style={{ width: `${job.data.progress}%` }}
+                />
+              </div>
+              {sourceCount > 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Processando {Math.min(processedCount + 1, sourceCount)} de {sourceCount} ·{" "}
+                  {job.data.progress}%
+                </p>
+              )}
+            </>
           )}
           {job.data.status === "failed" && job.data.error_message && (
             <p className="mt-2 text-sm text-destructive">{job.data.error_message}</p>
@@ -128,7 +158,7 @@ export function RenderSection({ projectId }: { projectId: string }) {
           )}
           {job.data && FINAL.has(job.data.status) && job.data.status !== "completed"
             ? "Tentar novamente"
-            : "Iniciar processamento"}
+            : "Processar todos os vídeos"}
         </button>
         {!health.data?.configured && (
           <span className="text-xs text-muted-foreground">
