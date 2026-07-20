@@ -67,7 +67,10 @@ export async function runJob(
 
   const heartbeat = new WallClockLimit(cfg.MAX_JOB_DURATION_SECONDS * 1000);
 
-  log.info({ inputs: payload.inputFiles.length, outputs: payload.outputTargets.length }, "job_claimed");
+  log.info(
+    { inputs: payload.inputFiles.length, outputs: payload.outputTargets.length },
+    "job_claimed",
+  );
 
   // Signal "processing" immediately so the app updates the UI.
   enqueueWebhook(db, {
