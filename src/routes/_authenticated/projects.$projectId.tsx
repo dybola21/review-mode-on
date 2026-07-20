@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { deleteProject, getProject, updateProject } from "@/lib/projects.functions";
 import { getAppSettings } from "@/lib/app-settings.functions";
 import { MediaSection } from "@/components/media-section";
-import { VariationsEditor } from "@/components/variations-editor";
+
 import { RightsSection } from "@/components/rights-section";
 import { RenderSection } from "@/components/render-section";
 
