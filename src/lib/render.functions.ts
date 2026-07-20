@@ -615,28 +615,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       uploadTtlSeconds: SIGNED_UPLOAD_TTL_SECONDS,
     };
 
-    // Cleanup helper for definitive POST /jobs failure. Removes only
-    // this job's targets and any partial storage objects under the
-    // job prefix; never touches other jobs.
-    const cleanupJobArtifacts = async () => {
-      try {
-        const prefix = `${context.userId}/${data.project_id}/${jobId}`;
-        const { data: listed } = await supabaseAdmin.storage
-          .from("render-outputs")
-          .list(prefix, { limit: 1000 });
-        const paths = (listed ?? []).map((o) => `${prefix}/${o.name}`);
-        if (paths.length > 0) {
-          await supabaseAdmin.storage.from("render-outputs").remove(paths);
-        }
-      } catch (e) {
-        console.error("[submitRenderJob] cleanup storage", e);
-      }
-      try {
-        await supabaseAdmin.from("render_output_targets").delete().eq("render_job_id", jobId);
-      } catch (e) {
-        console.error("[submitRenderJob] cleanup targets", e);
-      }
-    };
+    // Cleanup helper (moved above; see `cleanupJobArtifactsSafely`).
 
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 15000);
