@@ -61,13 +61,19 @@ describe("verifyRemoteOutput (worker client)", () => {
   });
 
   it("returns auth on 401", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("nope", { status: 401 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("nope", { status: 401 })),
+    );
     const r = await verifyRemoteOutput(cfg(), "job", "wjob", "out");
     expect(r).toEqual({ kind: "auth" });
   });
 
   it("returns transient on 503 (release path)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("busy", { status: 503 })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("busy", { status: 503 })),
+    );
     const r = await verifyRemoteOutput(cfg(), "job", "wjob", "out");
     expect(r).toEqual({ kind: "transient" });
   });
@@ -86,10 +92,7 @@ describe("verifyRemoteOutput (worker client)", () => {
   it("returns transient on malformed body (schema strict)", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ exists: "yes", size: 10 }), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ exists: "yes", size: 10 }), { status: 200 })),
     );
     const r = await verifyRemoteOutput(cfg(), "job", "wjob", "out");
     expect(r).toEqual({ kind: "transient" });
@@ -102,7 +105,10 @@ describe("QueueDB.deleteUploadedOutput (restart recovery)", () => {
     db.recordUploadedOutput("wjob-1", "out-1", 100, null);
     db.recordUploadedOutput("wjob-1", "out-2", 200, null);
     expect(
-      db.listUploadedOutputs("wjob-1").map((o) => o.worker_output_id).sort(),
+      db
+        .listUploadedOutputs("wjob-1")
+        .map((o) => o.worker_output_id)
+        .sort(),
     ).toEqual(["out-1", "out-2"]);
 
     db.deleteUploadedOutput("wjob-1", "out-1");
@@ -163,10 +169,7 @@ describe("verifyRemoteOutputWithRetry", () => {
   it("returns ok immediately when the app confirms existence", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ exists: true, size: 9 }), { status: 200 }),
-      ),
+      vi.fn(async () => new Response(JSON.stringify({ exists: true, size: 9 }), { status: 200 })),
     );
     const r = await drive(
       verifyRemoteOutputWithRetry(cfg(), "job", "wjob", "out", new AbortController().signal),

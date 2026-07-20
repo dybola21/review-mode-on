@@ -168,9 +168,6 @@ export async function runJob(
         alreadyUploaded.delete(target.workerOutputId);
       }
 
-
-
-
       const idx = payload.outputTargets.indexOf(target);
       const perSource = payload.variationCount;
       const sourceIdx = Math.floor(idx / perSource) % source.length;
@@ -470,4 +467,3 @@ export async function verifyRemoteOutputWithRetry(
 
 // Path is used indirectly through ensureInsideDir; explicit import kept for clarity.
 void path;
-

@@ -10,7 +10,6 @@ import {
   _resetConfigForTests,
 } from "../src/config.js";
 
-
 const SECRET = "x".repeat(32);
 const baseEnv = (over: Record<string, string | undefined>) =>
   ({
