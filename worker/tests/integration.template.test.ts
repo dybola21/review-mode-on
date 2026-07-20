@@ -5,13 +5,10 @@ import path from "node:path";
 import os from "node:os";
 import { buildTemplateOverlay } from "../src/render/template.js";
 import { renderOutput } from "../src/render/ffmpeg.js";
-import { computeVariationParams, computeWatermarkOffset } from "../src/render/variation.js";
 import { ffprobe } from "../src/storage/download.js";
-import type { TemplateSettings, VariationSettings } from "../src/types/contract.js";
+import type { TemplateSettings } from "../src/types/contract.js";
 
-// Production capability check. If any of these are missing the test MUST fail —
-// the CI installs ffmpeg, ffprobe and librsvg2-bin, and production Docker does
-// the same, so a missing binary is a real regression, not an environment quirk.
+// Production capability check.
 function requireBin(cmd: string, arg = "-version"): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, [arg], { shell: false });
@@ -27,22 +24,15 @@ const TEMPLATE: TemplateSettings = {
   identifier: "@meucanal",
   headline: "Título de teste da campanha",
   logo_file_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-  background_color: "#0F0F12", // near-black header
+  background_color: "#0F0F12",
   text_color: "#FFFFFF",
-  accent_color: "#FF5A1F", // recognisable accent bar
+  accent_color: "#FF5A1F",
   watermark_position: "bottom-right",
   watermark_opacity: 0.6,
   header_height_ratio: 0.12,
-};
-
-const VARIATION: VariationSettings = {
-  brightness: { min: 0, max: 0 },
-  contrast: { min: 1, max: 1 },
-  saturation: { min: 1, max: 1 },
-  temperature: { min: 0, max: 0 },
-  scale: { min: 1, max: 1 },
-  watermark_position_jitter: true,
-  variation_count: 2,
+  header_image_fit: "cover",
+  header_image_position_x: 0.5,
+  header_image_position_y: 0.5,
 };
 
 async function runFfmpeg(args: string[]): Promise<void> {
@@ -204,10 +194,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
     expect(assets.watermarkPngPath).toBeTruthy();
 
-    const jobId = "11111111-1111-1111-1111-111111111111";
-    const outId = "22222222-2222-2222-2222-222222222222";
-    const params = computeVariationParams(jobId, outId, 1, VARIATION);
-    const jitter = computeWatermarkOffset(jobId, outId, 1, true, 40);
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -218,9 +204,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         watermarkSize: assets.watermarkSize,
         watermarkPosition: TEMPLATE.watermark_position,
         watermarkOpacity: TEMPLATE.watermark_opacity,
-        watermarkJitter: jitter,
         outputPath: out,
-        variation: params,
         targetWidth: W,
         targetHeight: H,
         headerHeight: assets.layout.headerHeight,
@@ -308,10 +292,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       }
     }
     expect(sawWatermark).toBe(true);
-
-    // 6) Watermark stays fully inside the frame — jitter bounded.
-    expect(Math.abs(jitter.dx)).toBeLessThanOrEqual(40);
-    expect(Math.abs(jitter.dy)).toBeLessThanOrEqual(40);
   }, 120_000);
 
   it("fails cleanly with template_logo_invalid when logo is missing", async () => {
@@ -399,10 +379,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(fs.existsSync(assets.headerOverlayPath)).toBe(true);
     expect(assets.watermarkPngPath).toBeNull();
 
-    const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-    const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-    const params = computeVariationParams(jobId, outId, 1, VARIATION);
-    const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -413,9 +389,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         watermarkSize: assets.watermarkSize,
         watermarkPosition: headerTemplate.watermark_position,
         watermarkOpacity: headerTemplate.watermark_opacity,
-        watermarkJitter: jitter,
         outputPath: out,
-        variation: params,
         targetWidth: W,
         targetHeight: H,
         headerHeight: assets.layout.headerHeight,
@@ -567,10 +541,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         headerImageNaturalSize: { w: 1080, h: 1920 },
         ffmpegTimeoutMs: 30_000,
       });
-      const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-      const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-      const params = computeVariationParams(jobId, outId, 1, VARIATION);
-      const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
       const out = path.join(subDir, "out.mp4");
       const srcProbe = await ffprobe(src);
       await renderOutput(
@@ -581,9 +551,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
           watermarkSize: assets.watermarkSize,
           watermarkPosition: tpl.watermark_position,
           watermarkOpacity: tpl.watermark_opacity,
-          watermarkJitter: jitter,
           outputPath: out,
-          variation: params,
           targetWidth: W,
           targetHeight: H,
           headerHeight: assets.layout.headerHeight,

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { jobPayloadSchema } from "../src/types/contract.js";
+import { CONTRACT_VERSION, jobPayloadSchema } from "../src/types/contract.js";
 
 const base = {
+  contractVersion: CONTRACT_VERSION,
   jobId: "11111111-1111-1111-1111-111111111111",
   projectId: "22222222-2222-2222-2222-222222222222",
   callbackUrl: "https://app.example.com/api/public/worker-webhook",
@@ -17,9 +18,10 @@ const base = {
   outputTargets: [
     {
       workerOutputId: "44444444-4444-4444-4444-444444444444",
-      fileName: "src_v1.mp4",
+      fileName: "src.mp4",
       mimeType: "video/mp4",
       signedUploadUrl: "https://files.example.com/out",
+      sourceFileId: "33333333-3333-3333-3333-333333333333",
     },
   ],
   templateSettings: {
@@ -32,143 +34,128 @@ const base = {
     accent_color: "#FF5A1F",
     watermark_position: "bottom-right" as const,
     watermark_opacity: 0.6,
-    header_height_ratio: 0.12,
+    header_height_ratio: 0.335,
   },
-  variationSettings: {
-    brightness: { min: -0.05, max: 0.05 },
-    contrast: { min: 0.95, max: 1.05 },
-    saturation: { min: 0.95, max: 1.05 },
-    temperature: { min: -5, max: 5 },
-    scale: { min: 1.0, max: 1.03 },
-    watermark_position_jitter: false,
-    variation_count: 3,
-  },
-  variationCount: 3,
   uploadTtlSeconds: 3600,
 };
 
-describe("jobPayloadSchema", () => {
-  it("accepts a valid payload", () => {
+describe("jobPayloadSchema (v2)", () => {
+  it("accepts a valid v2 payload", () => {
     expect(jobPayloadSchema.safeParse(base).success).toBe(true);
   });
-  it("rejects unknown top-level fields (no storagePath leakage)", () => {
-    const bad = { ...base, storagePath: "user/proj/xyz" };
-    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+
+  it("rejects payloads without contractVersion=2", () => {
+    const badV1 = { ...base, contractVersion: 1 };
+    expect(jobPayloadSchema.safeParse(badV1).success).toBe(false);
+    const missing = { ...base } as Record<string, unknown>;
+    delete missing.contractVersion;
+    expect(jobPayloadSchema.safeParse(missing).success).toBe(false);
   });
-  it("rejects invalid fileType", () => {
+
+  it("rejects unknown top-level fields (no variationSettings leakage)", () => {
+    const bad = { ...base, variationSettings: {} };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+    const bad2 = { ...base, variationCount: 3 };
+    expect(jobPayloadSchema.safeParse(bad2).success).toBe(false);
+  });
+
+  it("rejects when outputTargets.length !== number of source_video inputs", () => {
     const bad = {
       ...base,
-      inputFiles: [{ ...base.inputFiles[0]!, fileType: "malware" }],
+      inputFiles: [
+        base.inputFiles[0]!,
+        {
+          fileId: "55555555-5555-5555-5555-555555555555",
+          fileName: "src2.mp4",
+          fileType: "source_video" as const,
+          mimeType: "video/mp4",
+          signedUrl: "https://files.example.com/src2",
+        },
+      ],
     };
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
   });
-  it("caps outputTargets length", () => {
-    const many = Array.from({ length: 401 }, (_, i) => ({
-      ...base.outputTargets[0]!,
-      workerOutputId: `44444444-4444-4444-4444-${String(i).padStart(12, "0")}`,
+
+  it("rejects when an outputTarget.sourceFileId does not match any input", () => {
+    const bad = {
+      ...base,
+      outputTargets: [
+        {
+          ...base.outputTargets[0]!,
+          sourceFileId: "99999999-9999-9999-9999-999999999999",
+        },
+      ],
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects duplicate sourceFileId across outputs (each source maps to exactly one output)", () => {
+    const bad = {
+      ...base,
+      inputFiles: [
+        base.inputFiles[0]!,
+        {
+          fileId: "66666666-6666-6666-6666-666666666666",
+          fileName: "src2.mp4",
+          fileType: "source_video" as const,
+          mimeType: "video/mp4",
+          signedUrl: "https://files.example.com/src2",
+        },
+      ],
+      outputTargets: [
+        base.outputTargets[0]!,
+        {
+          ...base.outputTargets[0]!,
+          workerOutputId: "77777777-7777-7777-7777-777777777777",
+          sourceFileId: base.outputTargets[0]!.sourceFileId, // duplicate
+        },
+      ],
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("accepts 1 header art + 5 sources -> 5 outputs", () => {
+    const sources = Array.from({ length: 5 }, (_, i) => ({
+      fileId: `88888888-8888-8888-8888-${String(i).padStart(12, "0")}`,
+      fileName: `src${i}.mp4`,
+      fileType: "source_video" as const,
+      mimeType: "video/mp4",
+      signedUrl: `https://files.example.com/src${i}`,
     }));
-    const bad = { ...base, outputTargets: many };
-    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
-  });
-  it("rejects non-url signedUrl", () => {
-    const bad = { ...base, inputFiles: [{ ...base.inputFiles[0]!, signedUrl: "not a url" }] };
-    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
-  });
-  it("rejects mismatched variationCount vs variationSettings.variation_count", () => {
-    const bad = { ...base, variationCount: 2 };
-    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
-  });
-  it("enforces canonical string limits (identifier<=60, headline<=160, page_name<=80)", () => {
-    const overIdent = {
-      ...base,
-      templateSettings: { ...base.templateSettings, identifier: "a".repeat(61) },
+    const header = {
+      fileId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      fileName: "header.png",
+      fileType: "template_asset" as const,
+      mimeType: "image/png",
+      signedUrl: "https://files.example.com/header",
     };
-    expect(jobPayloadSchema.safeParse(overIdent).success).toBe(false);
-    const overHead = {
-      ...base,
-      templateSettings: { ...base.templateSettings, headline: "b".repeat(161) },
-    };
-    expect(jobPayloadSchema.safeParse(overHead).success).toBe(false);
-    const overPage = {
-      ...base,
-      templateSettings: { ...base.templateSettings, page_name: "c".repeat(81) },
-    };
-    expect(jobPayloadSchema.safeParse(overPage).success).toBe(false);
-  });
-  it("accepts variation_count up to 100", () => {
-    const ok = {
-      ...base,
-      variationSettings: { ...base.variationSettings, variation_count: 100 },
-      variationCount: 100,
-    };
+    const targets = sources.map((s, i) => ({
+      workerOutputId: `99999999-9999-9999-9999-${String(i).padStart(12, "0")}`,
+      fileName: s.fileName,
+      mimeType: "video/mp4",
+      signedUploadUrl: `https://files.example.com/out${i}`,
+      sourceFileId: s.fileId,
+    }));
+    const ok = { ...base, inputFiles: [header, ...sources], outputTargets: targets };
     expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
   });
 
-  it("accepts header_image_file_id and header_image_fit", () => {
-    const ok = {
-      ...base,
-      templateSettings: {
-        ...base.templateSettings,
-        header_image_file_id: "55555555-5555-5555-5555-555555555555",
-        header_image_fit: "cover" as const,
-      },
-    };
-    expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
-    const ok2 = {
-      ...base,
-      templateSettings: {
-        ...base.templateSettings,
-        header_image_file_id: "55555555-5555-5555-5555-555555555555",
-        header_image_fit: "contain" as const,
-      },
-    };
-    expect(jobPayloadSchema.safeParse(ok2).success).toBe(true);
-  });
-
-  it("rejects invalid header_image_fit values", () => {
-    const bad = {
-      ...base,
-      templateSettings: { ...base.templateSettings, header_image_fit: "stretch" },
-    };
+  it("caps outputTargets length at 400", () => {
+    const sources = Array.from({ length: 401 }, (_, i) => ({
+      fileId: `88888888-8888-8888-8888-${String(i).padStart(12, "0")}`,
+      fileName: `src${i}.mp4`,
+      fileType: "source_video" as const,
+      mimeType: "video/mp4",
+      signedUrl: `https://files.example.com/src${i}`,
+    }));
+    const targets = sources.map((s, i) => ({
+      workerOutputId: `99999999-9999-9999-9999-${String(i).padStart(12, "0")}`,
+      fileName: s.fileName,
+      mimeType: "video/mp4",
+      signedUploadUrl: `https://files.example.com/out${i}`,
+      sourceFileId: s.fileId,
+    }));
+    const bad = { ...base, inputFiles: sources, outputTargets: targets };
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
-  });
-
-  it("rejects non-uuid header_image_file_id", () => {
-    const bad = {
-      ...base,
-      templateSettings: { ...base.templateSettings, header_image_file_id: "not-a-uuid" },
-    };
-    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
-  });
-
-  it("defaults header_image_position_x/y to 0.5 when omitted", () => {
-    const parsed = jobPayloadSchema.parse(base);
-    expect(parsed.templateSettings.header_image_position_x).toBe(0.5);
-    expect(parsed.templateSettings.header_image_position_y).toBe(0.5);
-  });
-
-  it("accepts explicit header_image_position_x/y inside 0..1", () => {
-    const ok = {
-      ...base,
-      templateSettings: {
-        ...base.templateSettings,
-        header_image_position_x: 0,
-        header_image_position_y: 1,
-      },
-    };
-    expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
-  });
-
-  it("rejects header_image_position_x/y outside 0..1", () => {
-    const badLo = {
-      ...base,
-      templateSettings: { ...base.templateSettings, header_image_position_x: -0.01 },
-    };
-    expect(jobPayloadSchema.safeParse(badLo).success).toBe(false);
-    const badHi = {
-      ...base,
-      templateSettings: { ...base.templateSettings, header_image_position_y: 1.01 },
-    };
-    expect(jobPayloadSchema.safeParse(badHi).success).toBe(false);
   });
 });

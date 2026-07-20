@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { templateSettingsSchema, variationSettingsSchema } from "../src/types/contract.js";
+import { templateSettingsSchema } from "../src/types/contract.js";
 
 // Canonical limits shared with the frontend contract (src/lib/project-schemas.ts).
 // If these diverge, both this test and the sibling frontend test must be updated together.
@@ -7,7 +7,6 @@ const CANONICAL = {
   page_name_max: 80,
   identifier_max: 60,
   headline_max: 160,
-  variation_count_max: 100,
 } as const;
 
 const validTemplate = {
@@ -20,7 +19,7 @@ const validTemplate = {
   accent_color: "#FF5A1F",
   watermark_position: "bottom-right" as const,
   watermark_opacity: 0.6,
-  header_height_ratio: 0.12,
+  header_height_ratio: 0.335,
 };
 
 describe("worker canonical contract limits", () => {
@@ -65,29 +64,6 @@ describe("worker canonical contract limits", () => {
       templateSettingsSchema.safeParse({
         ...validTemplate,
         headline: "a".repeat(CANONICAL.headline_max + 1),
-      }).success,
-    ).toBe(false);
-  });
-
-  it(`variation_count accepts ${CANONICAL.variation_count_max} and rejects +1`, () => {
-    const base = {
-      brightness: { min: 0, max: 0 },
-      contrast: { min: 1, max: 1 },
-      saturation: { min: 1, max: 1 },
-      temperature: { min: 0, max: 0 },
-      scale: { min: 1, max: 1 },
-      watermark_position_jitter: false,
-    };
-    expect(
-      variationSettingsSchema.safeParse({
-        ...base,
-        variation_count: CANONICAL.variation_count_max,
-      }).success,
-    ).toBe(true);
-    expect(
-      variationSettingsSchema.safeParse({
-        ...base,
-        variation_count: CANONICAL.variation_count_max + 1,
       }).success,
     ).toBe(false);
   });

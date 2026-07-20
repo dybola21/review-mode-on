@@ -2,11 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
+import { CONTRACT_VERSION, RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
 import {
   bucketForFileType,
   buildOutputStoragePath,
-  computeMaxOutputs,
   normalizePublicAppUrl,
   sanitizeBaseName,
   validateRenderInput,
@@ -264,7 +263,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 1) Project
     const { data: project, error: projectErr } = await context.supabase
       .from("projects")
-      .select("id, status, template_settings, variation_settings, variation_count")
+      .select("id, status, template_settings")
       .eq("id", data.project_id)
       .maybeSingle();
     if (projectErr || !project) throw clientError("Projeto não encontrado.");
@@ -282,8 +281,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
 
     // 2b) Assets referenced by the template (logo e/ou arte do cabeçalho).
-    //     Nunca enviamos assets não referenciados — o servidor deriva
-    //     file_type de project_files (jamais confia no cliente).
     const templateSettings = (project.template_settings ?? {}) as {
       logo_file_id?: string | null;
       header_image_file_id?: string | null;
@@ -360,30 +357,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Já existe um processamento em andamento.");
     }
 
-    // 5) Compute expected outputs (raw product — HARD_MAX enforced BEFORE
-    //    any write: no job, no targets, no signed URLs when 401+.).
-    const variationFromSettings = Number(
-      (project.variation_settings as { variation_count?: unknown } | null)?.variation_count,
-    );
-    const variationCount = Math.max(
-      1,
-      Number.isFinite(variationFromSettings) && variationFromSettings > 0
-        ? Math.floor(variationFromSettings)
-        : Number(project.variation_count) || 1,
-    );
-    const totalOutputs = computeMaxOutputs(files.length, variationCount);
+    // 5) v2: 1:1 — número de saídas = número de vídeos de origem. Sem clamp.
+    const totalOutputs = files.length;
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
     if (totalOutputs > HARD_MAX_OUTPUTS) {
-      throw clientError(
-        `Combinação de arquivos e variações excede o limite de ${HARD_MAX_OUTPUTS} saídas.`,
-      );
+      throw clientError(`O limite é de ${HARD_MAX_OUTPUTS} vídeos por processamento.`);
     }
 
-    // 5b) Validate every input file BEFORE we write anything. This closes
-    //     the pre-write door: no job, no targets, no signed URLs unless
-    //     every input passes the render invariants.
+    // 5b) Validate every input file BEFORE we write anything.
     const allInputsForValidation = [...files, ...assetFiles];
     for (const f of allInputsForValidation) {
       const reason = validateRenderInput(
@@ -465,37 +448,33 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       }
     };
 
-    // 7) Pre-create output targets (server-owned paths & IDs)
+    // 7) Pre-create output targets — 1:1 com source_video (sem variações).
     type Target = {
       workerOutputId: string;
       fileName: string;
       storagePath: string;
       mimeType: string;
       sourceFileId: string;
-      variationIndex: number;
     };
     const targets: Target[] = [];
     try {
       for (const f of files) {
         const base = sanitizeBaseName((f.file_name ?? "video").replace(/\.[^.]+$/, ""));
-        for (let v = 1; v <= variationCount; v++) {
-          const workerOutputId = crypto.randomUUID();
-          const storagePath = buildOutputStoragePath({
-            userId: context.userId,
-            projectId: data.project_id,
-            jobId,
-            workerOutputId,
-            extension: "mp4",
-          });
-          targets.push({
-            workerOutputId,
-            fileName: `${base}_v${v}.mp4`,
-            storagePath,
-            mimeType: "video/mp4",
-            sourceFileId: f.id,
-            variationIndex: v,
-          });
-        }
+        const workerOutputId = crypto.randomUUID();
+        const storagePath = buildOutputStoragePath({
+          userId: context.userId,
+          projectId: data.project_id,
+          jobId,
+          workerOutputId,
+          extension: "mp4",
+        });
+        targets.push({
+          workerOutputId,
+          fileName: `${base}.mp4`,
+          storagePath,
+          mimeType: "video/mp4",
+          sourceFileId: f.id,
+        });
       }
 
       const { error: tErr } = await supabaseAdmin.from("render_output_targets").insert(
@@ -508,7 +487,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
           storage_path: t.storagePath,
           mime_type: t.mimeType,
           source_file_id: t.sourceFileId,
-          variation_index: t.variationIndex,
+          // Legacy schema field kept for compatibility — always 1 in v2.
+          variation_index: 1,
         })),
       );
       if (tErr) throw new Error(`targets insert: ${tErr.message}`);
@@ -577,6 +557,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       fileName: string;
       mimeType: string;
       signedUploadUrl: string;
+      sourceFileId: string;
     };
     let outputTargets: OutputTargetPayload[];
     try {
@@ -591,6 +572,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
             fileName: t.fileName,
             mimeType: t.mimeType,
             signedUploadUrl: signed.signedUrl,
+            sourceFileId: t.sourceFileId,
           };
         }),
       );
@@ -608,17 +590,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     logSubmit("signed_urls_created", { projectId: data.project_id, jobId });
 
-    // 10) Send job to worker. templateSettings references assets by
-    //     fileId only — never storagePath or signed URL.
+    // 10) Send job to worker (v2). templateSettings references assets by
+    //     fileId only — never storagePath or signed URL. Sem variações.
     const payload = {
+      contractVersion: CONTRACT_VERSION,
       jobId,
       projectId: data.project_id,
       callbackUrl,
       inputFiles: signedInputs,
       outputTargets,
       templateSettings: project.template_settings,
-      variationSettings: project.variation_settings,
-      variationCount,
       uploadTtlSeconds: SIGNED_UPLOAD_TTL_SECONDS,
     };
 

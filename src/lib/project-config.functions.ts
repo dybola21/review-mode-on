@@ -1,12 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  makeVariationSettingsSchema,
-  templateSettingsSchema,
-  RIGHTS_CONFIRMATION_VERSION,
-} from "./project-schemas";
-import { DEFAULT_APP_SETTINGS } from "./app-settings.functions";
+import { templateSettingsSchema, RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
 import type { TablesUpdate } from "@/integrations/supabase/types";
 
 function clientError(msg: string): Error {
@@ -17,8 +12,7 @@ const projectIdSchema = z.object({ project_id: z.string().uuid() });
 
 /**
  * Verifies that the authenticated user owns `projectId` using the RLS-scoped
- * client. Returns only when RLS lets the caller see the row. This is the
- * gate BEFORE we escalate to the service-role client for the write.
+ * client. Returns only when RLS lets the caller see the row.
  */
 export async function assertProjectOwnership(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,6 +31,9 @@ export async function assertProjectOwnership(
  * Applies a strictly allow-listed patch to `projects` using service_role.
  * Never trusts the client for user_id, status, or any other server-controlled
  * field. Requires exactly one row updated.
+ *
+ * The allow-list keeps legacy variation columns writable so existing
+ * migrations/tests don't fail, but the v2 flow no longer sends them.
  */
 export async function applyOwnedProjectPatch(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,57 +91,10 @@ export const updateTemplateSettings = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const updateVariationsSchema = z.object({
-  project_id: z.string().uuid(),
-  // O settings vem em formato bruto; validamos com base em app_settings.
-  settings: z.unknown(),
-});
-
-export const updateVariationSettings = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => updateVariationsSchema.parse(data))
-  .handler(async ({ data, context }) => {
-    await assertProjectOwnership(context.supabase, data.project_id);
-
-    const { data: settingRow } = await context.supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "max_variations")
-      .maybeSingle();
-    const maxVariations =
-      typeof settingRow?.value === "number" && settingRow.value > 0
-        ? settingRow.value
-        : DEFAULT_APP_SETTINGS.max_variations;
-
-    const schema = makeVariationSettingsSchema(maxVariations);
-    const parsed = schema.safeParse(data.settings);
-    if (!parsed.success) {
-      throw clientError(parsed.error.issues[0]?.message ?? "Configuração inválida.");
-    }
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    try {
-      await applyOwnedProjectPatch(supabaseAdmin, {
-        projectId: data.project_id,
-        userId: context.userId,
-        patch: {
-          variation_settings: parsed.data,
-          variation_count: parsed.data.variation_count,
-        },
-      });
-    } catch (err) {
-      console.error("[updateVariationSettings]", err);
-      if (err instanceof Error && err.message === "Projeto não encontrado.") throw err;
-      throw clientError("Não foi possível salvar as variações.");
-    }
-    return { ok: true };
-  });
-
 export const confirmProjectRights = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => projectIdSchema.parse(data))
   .handler(async ({ data, context }) => {
-    // Confirma propriedade
     const { data: project } = await context.supabase
       .from("projects")
       .select("id")
@@ -152,7 +102,6 @@ export const confirmProjectRights = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!project) throw clientError("Projeto não encontrado.");
 
-    // Existe confirmação atual? Se sim, no-op.
     const { data: existing } = await context.supabase
       .from("rights_confirmations")
       .select("id, rights_confirmed_at")
