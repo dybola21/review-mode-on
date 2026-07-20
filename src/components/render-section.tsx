@@ -25,7 +25,13 @@ const STATUS_LABEL: Record<string, string> = {
   expired: "Expirado",
 };
 
-export function RenderSection({ projectId }: { projectId: string }) {
+export function RenderSection({
+  projectId,
+  hasHeaderArt,
+}: {
+  projectId: string;
+  hasHeaderArt: boolean;
+}) {
   const qc = useQueryClient();
   const healthFn = useServerFn(checkWorkerHealth);
   const jobFn = useServerFn(getLatestRenderJob);
@@ -85,7 +91,8 @@ export function RenderSection({ projectId }: { projectId: string }) {
     health.data?.available &&
     !isActive &&
     !submit.isPending &&
-    sourceCount > 0;
+    sourceCount > 0 &&
+    hasHeaderArt;
 
   const workerStatus = !health.data
     ? { icon: Loader2, label: "Verificando servidor…", cls: "text-muted-foreground animate-spin" }
@@ -186,6 +193,11 @@ export function RenderSection({ projectId }: { projectId: string }) {
             ? "Tentar novamente"
             : "Processar todos os vídeos"}
         </button>
+        {!hasHeaderArt && (
+          <span className="text-xs text-amber-500">
+            Selecione e salve uma arte de cabeçalho.
+          </span>
+        )}
         {!health.data?.configured && (
           <span className="text-xs text-muted-foreground">
             Configure o servidor de processamento para habilitar.
