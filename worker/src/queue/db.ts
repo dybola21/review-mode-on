@@ -108,10 +108,9 @@ export class QueueDB {
   // -------------------------------------------------------------------
   enqueue(payload: JobPayload, idempotencyKey: string): QueueRow {
     const existing = this.db
-      .prepare<
-        [string, string],
-        QueueRow
-      >(`SELECT * FROM jobs WHERE app_job_id = ? OR idempotency_key = ? LIMIT 1`)
+      .prepare<[string, string], QueueRow>(
+        `SELECT * FROM jobs WHERE app_job_id = ? OR idempotency_key = ? LIMIT 1`,
+      )
       .get(payload.jobId, idempotencyKey);
     if (existing) return existing;
 
@@ -165,10 +164,9 @@ export class QueueDB {
   claimNextQueued(): QueueRow | undefined {
     const tx = this.db.transaction((): QueueRow | undefined => {
       const row = this.db
-        .prepare<
-          [],
-          QueueRow
-        >(`SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1`)
+        .prepare<[], QueueRow>(
+          `SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at LIMIT 1`,
+        )
         .get();
       if (!row) return undefined;
       const now = new Date().toISOString();
@@ -257,10 +255,9 @@ export class QueueDB {
     checksum: string | null;
   }> {
     return this.db
-      .prepare<
-        [string],
-        { worker_output_id: string; file_size: number; checksum: string | null }
-      >(`SELECT worker_output_id, file_size, checksum FROM uploaded_outputs WHERE worker_job_id = ?`)
+      .prepare<[string], { worker_output_id: string; file_size: number; checksum: string | null }>(
+        `SELECT worker_output_id, file_size, checksum FROM uploaded_outputs WHERE worker_job_id = ?`,
+      )
       .all(workerJobId);
   }
 
