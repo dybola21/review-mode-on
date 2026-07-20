@@ -613,4 +613,3 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(botBand[0]).toBeLessThan(80);
   }, 180_000);
 });
-

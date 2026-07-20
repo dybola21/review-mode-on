@@ -172,4 +172,3 @@ describe("jobPayloadSchema", () => {
     expect(jobPayloadSchema.safeParse(badHi).success).toBe(false);
   });
 });
-

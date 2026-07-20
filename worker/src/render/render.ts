@@ -148,7 +148,6 @@ export async function runJob(
       ffmpegTimeoutMs: 60_000,
     });
 
-
     // Watermark jitter budget: up to 4% of frame width.
     const jitterBudget = Math.round(OUT_W * 0.04);
 
@@ -439,7 +438,9 @@ export class RecoveryDeferError extends Error {
 }
 
 export type VerifyRetryResult =
-  { kind: "ok"; exists: boolean; size: number } | { kind: "auth" } | { kind: "transient" };
+  | { kind: "ok"; exists: boolean; size: number }
+  | { kind: "auth" }
+  | { kind: "transient" };
 
 /**
  * Decide what to do with a locally-uploaded output based on remote

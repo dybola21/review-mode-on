@@ -67,7 +67,6 @@ export interface TemplateAssets {
   };
 }
 
-
 export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<TemplateAssets> {
   const t = args.template;
   const width = args.width;
@@ -122,7 +121,6 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
         accent,
         logoDataUri,
       });
-
 
   const base = safeBaseName(args.jobId);
   const svgPath = ensureInsideDir(args.outDir, `overlay_header_${base}.svg`);
@@ -220,7 +218,6 @@ function buildHeaderArtSvg(o: HeaderArtSvgArgs): string {
 </g>
 </svg>`;
 }
-
 
 interface HeaderSvgArgs {
   width: number;
