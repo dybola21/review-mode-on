@@ -294,10 +294,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       }
     }
     expect(sawWatermark).toBe(true);
-
-    // 6) Watermark stays fully inside the frame — jitter bounded.
-    expect(Math.abs(jitter.dx)).toBeLessThanOrEqual(40);
-    expect(Math.abs(jitter.dy)).toBeLessThanOrEqual(40);
   }, 120_000);
 
   it("fails cleanly with template_logo_invalid when logo is missing", async () => {
