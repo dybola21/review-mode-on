@@ -44,6 +44,8 @@ export const templateSettingsSchema = z
       .default("bottom-right"),
     watermark_opacity: z.number().min(0).max(1).default(0.6),
     header_height_ratio: z.number().min(0).max(0.4).default(0.335),
+    header_image_position_x: z.number().min(0).max(1).default(0.5),
+    header_image_position_y: z.number().min(0).max(1).default(0.5),
   })
   .strict();
 
