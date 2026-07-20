@@ -151,17 +151,109 @@ describe("storage paths", () => {
 });
 
 describe("computeMaxOutputs", () => {
-  it("multiplies files by variations", () => {
+  it("returns raw product without clamp", () => {
     expect(computeMaxOutputs(3, 4)).toBe(12);
   });
-  it("caps at the hard maximum", () => {
-    expect(computeMaxOutputs(50, 50, 400)).toBe(400);
+  it("allows exactly 400", () => {
+    expect(computeMaxOutputs(20, 20)).toBe(400);
+  });
+  it("returns >400 for callers to reject up-front", () => {
+    expect(computeMaxOutputs(21, 20)).toBe(420);
+    expect(computeMaxOutputs(50, 50)).toBe(2500);
   });
   it("floors negatives to zero", () => {
     expect(computeMaxOutputs(-1, 5)).toBe(0);
     expect(computeMaxOutputs(5, 0)).toBe(0);
   });
 });
+
+describe("bucketForFileType", () => {
+  it("maps known types to canonical buckets", () => {
+    expect(bucketForFileType("source_video")).toBe("project-inputs");
+    expect(bucketForFileType("logo")).toBe("project-assets");
+    expect(bucketForFileType("template_asset")).toBe("project-assets");
+  });
+  it("returns null for unknown types", () => {
+    expect(bucketForFileType("random")).toBeNull();
+    expect(bucketForFileType("")).toBeNull();
+  });
+});
+
+describe("mimeAllowedForFileType", () => {
+  it("enforces video for source_video", () => {
+    expect(mimeAllowedForFileType("source_video", "video/mp4")).toBe(true);
+    expect(mimeAllowedForFileType("source_video", "image/png")).toBe(false);
+    expect(mimeAllowedForFileType("source_video", null)).toBe(false);
+    expect(mimeAllowedForFileType("source_video", undefined)).toBe(false);
+  });
+  it("enforces image for logo", () => {
+    expect(mimeAllowedForFileType("logo", "image/png")).toBe(true);
+    expect(mimeAllowedForFileType("logo", "video/mp4")).toBe(false);
+  });
+  it("allows image or video for template_asset", () => {
+    expect(mimeAllowedForFileType("template_asset", "image/svg+xml")).toBe(true);
+    expect(mimeAllowedForFileType("template_asset", "video/mp4")).toBe(true);
+    expect(mimeAllowedForFileType("template_asset", "application/pdf")).toBe(false);
+  });
+});
+
+describe("isValidInputStoragePath", () => {
+  const u = "11111111-1111-1111-1111-111111111111";
+  const p = "22222222-2222-2222-2222-222222222222";
+  it("accepts a path with the exact prefix", () => {
+    expect(isValidInputStoragePath(`${u}/${p}/abc/file.mp4`, u, p)).toBe(true);
+  });
+  it("rejects wrong owner or project", () => {
+    expect(isValidInputStoragePath(`other/${p}/x.mp4`, u, p)).toBe(false);
+    expect(isValidInputStoragePath(`${u}/other/x.mp4`, u, p)).toBe(false);
+  });
+  it("rejects traversal, double slash, backslash", () => {
+    expect(isValidInputStoragePath(`${u}/${p}/../evil.mp4`, u, p)).toBe(false);
+    expect(isValidInputStoragePath(`${u}/${p}//evil.mp4`, u, p)).toBe(false);
+    expect(isValidInputStoragePath(`${u}/${p}/\\evil.mp4`, u, p)).toBe(false);
+  });
+  it("rejects empty and prefix-only", () => {
+    expect(isValidInputStoragePath("", u, p)).toBe(false);
+    expect(isValidInputStoragePath(`${u}/${p}/`, u, p)).toBe(false);
+  });
+});
+
+describe("validateRenderInput", () => {
+  const u = "11111111-1111-1111-1111-111111111111";
+  const p = "22222222-2222-2222-2222-222222222222";
+  const base = {
+    id: "f1",
+    user_id: u,
+    project_id: p,
+    status: "uploaded",
+    file_type: "source_video",
+    mime_type: "video/mp4",
+    storage_path: `${u}/${p}/f1/vid.mp4`,
+  };
+  it("accepts a fully-valid input", () => {
+    expect(validateRenderInput(base, u, p)).toBeNull();
+  });
+  it("rejects not-uploaded", () => {
+    expect(validateRenderInput({ ...base, status: "pending" }, u, p)).toBe("not_uploaded");
+  });
+  it("rejects wrong owner and project", () => {
+    expect(validateRenderInput({ ...base, user_id: "other" }, u, p)).toBe("wrong_owner");
+    expect(validateRenderInput({ ...base, project_id: "other" }, u, p)).toBe("wrong_project");
+  });
+  it("rejects invalid file_type", () => {
+    expect(validateRenderInput({ ...base, file_type: "junk" }, u, p)).toBe("invalid_type");
+  });
+  it("rejects invalid path", () => {
+    expect(validateRenderInput({ ...base, storage_path: `other/${p}/x` }, u, p)).toBe(
+      "invalid_path",
+    );
+  });
+  it("rejects incompatible MIME", () => {
+    expect(validateRenderInput({ ...base, mime_type: "image/png" }, u, p)).toBe("invalid_mime");
+    expect(validateRenderInput({ ...base, mime_type: null }, u, p)).toBe("invalid_mime");
+  });
+});
+
 
 describe("sanitizeBaseName", () => {
   it("keeps safe characters", () => {
