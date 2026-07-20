@@ -189,3 +189,58 @@ export function RenderSection({ projectId }: { projectId: string }) {
     </div>
   );
 }
+
+function fmtDuration(s: number): string {
+  const sec = Math.max(0, Math.round(s));
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  if (m <= 0) return `${r}s`;
+  return `${m}m${r.toString().padStart(2, "0")}s`;
+}
+
+function DiagnosticsBlock({
+  d,
+}: {
+  d: NonNullable<ReturnType<typeof useServerFn<typeof getRenderJobDiagnostics>>> extends never
+    ? never
+    : Exclude<Awaited<ReturnType<typeof getRenderJobDiagnostics>>, null>;
+}) {
+  let title = "Diagnóstico";
+  let detail = "";
+  if (d.status === "queued" && d.queuePosition != null) {
+    detail = `Na fila — posição ${d.queuePosition}`;
+  } else if (d.stage === "downloading") {
+    detail = `Baixando entradas — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "preparing") {
+    detail = `Preparando template — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "rendering") {
+    detail = `Renderizando — ${fmtDuration(d.elapsedSeconds)}`;
+  } else if (d.stage === "uploading") {
+    detail = `Upload — ${d.progress}%`;
+  } else if (d.stage === "claimed") {
+    detail = `Iniciando — ${fmtDuration(d.elapsedSeconds)}`;
+  } else {
+    detail = `${d.stage} — ${fmtDuration(d.elapsedSeconds)}`;
+  }
+
+  const hbAgeSec = d.heartbeatAt
+    ? Math.max(0, Math.round((Date.now() - Date.parse(d.heartbeatAt)) / 1000))
+    : null;
+  const stale = hbAgeSec != null && hbAgeSec >= 30;
+
+  return (
+    <div className="rounded-md border border-border/60 bg-surface/60 p-3 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-muted-foreground">{title}</span>
+        <span className="text-muted-foreground">tentativa {d.attemptCount}</span>
+      </div>
+      <p className="mt-1 text-sm text-foreground">{detail}</p>
+      {stale && (
+        <p className="mt-1 text-amber-500">Sem heartbeat há {hbAgeSec}s</p>
+      )}
+      {d.lastErrorCode && (
+        <p className="mt-1 text-destructive">Último código: {d.lastErrorCode}</p>
+      )}
+    </div>
+  );
+}
