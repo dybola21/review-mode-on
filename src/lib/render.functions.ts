@@ -372,14 +372,18 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
 
     // 2b) Assets referenced by the template (logo e/ou arte do cabeçalho).
-    const templateSettings = (project.template_settings ?? {}) as {
-      logo_file_id?: string | null;
-      header_image_file_id?: string | null;
-    };
+    // Contrato v2: header_image_file_id é OBRIGATÓRIO (UUID). Valida antes
+    // de qualquer escrita para dar mensagem clara ao usuário e evitar
+    // rejeição do worker por "invalid_payload".
+    const rawTemplate = (project.template_settings ?? {}) as Record<string, unknown>;
+    const templateParse = renderTemplateSettingsSchema.safeParse(rawTemplate);
+    if (!templateParse.success) {
+      throw clientError("Selecione e salve uma arte de cabeçalho antes de processar.");
+    }
+    const templateSettings = templateParse.data;
     const referencedAssetIds = new Set<string>();
     if (templateSettings.logo_file_id) referencedAssetIds.add(templateSettings.logo_file_id);
-    if (templateSettings.header_image_file_id)
-      referencedAssetIds.add(templateSettings.header_image_file_id);
+    referencedAssetIds.add(templateSettings.header_image_file_id);
 
     let assetFiles: Array<{
       id: string;
