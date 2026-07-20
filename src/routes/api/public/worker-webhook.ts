@@ -260,13 +260,12 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
             // Load expected targets so we can verify Storage BEFORE calling
             // the atomic RPC.
-            const { data: targets, error: tErr } = await (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              supabaseAdmin.from("render_output_targets") as any
-            )
+            const { data: targets, error: tErr } =
+              await // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabaseAdmin.from("render_output_targets") as any)
 
-              .select("worker_output_id, storage_path")
-              .eq("render_job_id", job.id);
+                .select("worker_output_id, storage_path")
+                .eq("render_job_id", job.id);
             if (tErr || !targets) {
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "targets", tErr);
             }
