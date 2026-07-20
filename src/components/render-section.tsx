@@ -3,7 +3,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, CheckCircle2, Loader2, PlayCircle, RefreshCw, Server } from "lucide-react";
 import { toast } from "sonner";
-import { checkWorkerHealth, getLatestRenderJob, submitRenderJob } from "@/lib/render.functions";
+import {
+  checkWorkerHealth,
+  getLatestRenderJob,
+  getRenderJobDiagnostics,
+  submitRenderJob,
+} from "@/lib/render.functions";
 import { listProjectFiles } from "@/lib/project-files.functions";
 
 const ACTIVE = new Set(["queued", "submitting", "processing"]);
