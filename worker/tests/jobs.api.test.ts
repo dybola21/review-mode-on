@@ -33,6 +33,8 @@ const cfg = {
   NODE_ENV: "production",
 } as unknown as Parameters<typeof registerJobs>[2];
 
+const HEADER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
 const payload = {
   contractVersion: CONTRACT_VERSION,
   jobId: "11111111-1111-1111-1111-111111111111",
@@ -46,6 +48,13 @@ const payload = {
       mimeType: "video/mp4",
       signedUrl: "https://files.example.com/src",
     },
+    {
+      fileId: HEADER_ID,
+      fileName: "header.png",
+      fileType: "template_asset",
+      mimeType: "image/png",
+      signedUrl: "https://files.example.com/header",
+    },
   ],
   outputTargets: [
     {
@@ -57,6 +66,7 @@ const payload = {
     },
   ],
   templateSettings: {
+    header_image_file_id: HEADER_ID,
     page_name: "",
     identifier: "",
     headline: "",
