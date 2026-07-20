@@ -39,6 +39,18 @@ export type TemplateSettings = z.infer<typeof templateSettingsSchema>;
 
 export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = templateSettingsSchema.parse({});
 
+/**
+ * Schema estrito para envio ao worker (contrato v2). Diferente do
+ * templateSettingsSchema (rascunho), aqui `header_image_file_id`
+ * é OBRIGATÓRIO e deve ser um UUID — o worker rejeita qualquer coisa
+ * diferente. Use este schema em submitRenderJob, nunca em edição.
+ */
+export const renderTemplateSettingsSchema = templateSettingsSchema.extend({
+  header_image_file_id: z.string().uuid({ message: "header_image_file_id obrigatório" }),
+});
+
+export type RenderTemplateSettings = z.infer<typeof renderTemplateSettingsSchema>;
+
 export const CONTRACT_VERSION = 2 as const;
 
 export const RIGHTS_CONFIRMATION_VERSION = "1.0";
