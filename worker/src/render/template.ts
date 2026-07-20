@@ -105,6 +105,9 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
         headerHeight,
         fit: t.header_image_fit,
         imageDataUri: headerImageDataUri as string,
+        naturalSize: args.headerImageNaturalSize ?? null,
+        positionX: clamp01(t.header_image_position_x ?? 0.5),
+        positionY: clamp01(t.header_image_position_y ?? 0.5),
       })
     : buildHeaderSvg({
         width,
@@ -119,6 +122,7 @@ export async function buildTemplateOverlay(args: BuildTemplateArgs): Promise<Tem
         accent,
         logoDataUri,
       });
+
 
   const base = safeBaseName(args.jobId);
   const svgPath = ensureInsideDir(args.outDir, `overlay_header_${base}.svg`);
