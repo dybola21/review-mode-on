@@ -302,36 +302,6 @@ export function ProjectFilesSection({
   );
 }
 
-// Upload com progresso real via XHR
-function xhrUpload({
-  url,
-  file,
-  signal,
-  onProgress,
-}: {
-  url: string;
-  file: File;
-  signal: AbortSignal;
-  onProgress: (p: number) => void;
-}): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", file.type);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve(true);
-      else reject(new Error(`Falha no upload (${xhr.status}).`));
-    };
-    xhr.onerror = () => reject(new Error("Erro de rede no upload."));
-    xhr.onabort = () => resolve(false);
-    signal.addEventListener("abort", () => xhr.abort(), { once: true });
-    xhr.send(file);
-  });
-}
 
 // Hook útil para evitar hydration mismatch (não usado no arquivo por ora)
 export function useHydrated() {
