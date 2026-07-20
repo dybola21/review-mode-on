@@ -5,6 +5,7 @@ import os from "node:os";
 import Fastify from "fastify";
 import { QueueDB } from "../src/queue/db.js";
 import { registerJobs } from "../src/api/jobs.js";
+import { CONTRACT_VERSION } from "../src/types/contract.js";
 
 const KEY = "x".repeat(32);
 const cfg = {
@@ -33,6 +34,7 @@ const cfg = {
 } as unknown as Parameters<typeof registerJobs>[2];
 
 const payload = {
+  contractVersion: CONTRACT_VERSION,
   jobId: "11111111-1111-1111-1111-111111111111",
   projectId: "22222222-2222-2222-2222-222222222222",
   callbackUrl: "https://app.example.com/api/public/worker-webhook",
@@ -48,9 +50,10 @@ const payload = {
   outputTargets: [
     {
       workerOutputId: "44444444-4444-4444-4444-444444444444",
-      fileName: "src_v1.mp4",
+      fileName: "src.mp4",
       mimeType: "video/mp4",
       signedUploadUrl: "https://files.example.com/out",
+      sourceFileId: "33333333-3333-3333-3333-333333333333",
     },
   ],
   templateSettings: {
@@ -63,18 +66,8 @@ const payload = {
     accent_color: "#FF5A1F",
     watermark_position: "bottom-right",
     watermark_opacity: 0.6,
-    header_height_ratio: 0.12,
+    header_height_ratio: 0.335,
   },
-  variationSettings: {
-    brightness: { min: -0.05, max: 0.05 },
-    contrast: { min: 0.95, max: 1.05 },
-    saturation: { min: 0.95, max: 1.05 },
-    temperature: { min: -5, max: 5 },
-    scale: { min: 1.0, max: 1.03 },
-    watermark_position_jitter: false,
-    variation_count: 3,
-  },
-  variationCount: 3,
   uploadTtlSeconds: 3600,
 };
 
@@ -123,6 +116,42 @@ describe("POST /jobs", () => {
       payload,
     });
     expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("rejects payload without contractVersion with contract_version_unsupported", async () => {
+    const { app } = makeApp(dir);
+    const bad = { ...payload } as Record<string, unknown>;
+    delete bad.contractVersion;
+    const res = await app.inject({
+      method: "POST",
+      url: "/jobs",
+      headers: {
+        authorization: `Bearer ${KEY}`,
+        "idempotency-key": "idem-key-abc",
+        "content-type": "application/json",
+      },
+      payload: bad,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe("contract_version_unsupported");
+    await app.close();
+  });
+
+  it("rejects payload with contractVersion=1 with contract_version_unsupported", async () => {
+    const { app } = makeApp(dir);
+    const res = await app.inject({
+      method: "POST",
+      url: "/jobs",
+      headers: {
+        authorization: `Bearer ${KEY}`,
+        "idempotency-key": "idem-key-abc",
+        "content-type": "application/json",
+      },
+      payload: { ...payload, contractVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe("contract_version_unsupported");
     await app.close();
   });
 

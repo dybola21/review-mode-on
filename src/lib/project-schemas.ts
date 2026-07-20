@@ -1,16 +1,15 @@
 import { z } from "zod";
 
 /**
- * Zod schemas compartilhados entre client e server para template e variações.
+ * Zod schemas compartilhados entre client e server para template.
  * Não importar código de servidor.
+ * v2: sem variações. Cada vídeo de origem gera exatamente uma saída.
  */
 
 export const templateSettingsSchema = z.object({
-  // Novo layout: arte pronta no cabeçalho + vídeo abaixo.
   header_image_file_id: z.string().uuid().nullable().optional(),
   header_image_fit: z.enum(["cover", "contain"]).default("cover"),
-  // Campos legados — mantidos apenas para compatibilidade com projetos
-  // antigos. Ignorados sempre que header_image_file_id existir.
+  // Legados — mantidos apenas para compatibilidade com projetos antigos.
   page_name: z.string().trim().max(80).default(""),
   identifier: z.string().trim().max(60).default(""),
   headline: z.string().trim().max(160).default(""),
@@ -40,46 +39,7 @@ export type TemplateSettings = z.infer<typeof templateSettingsSchema>;
 
 export const DEFAULT_TEMPLATE_SETTINGS: TemplateSettings = templateSettingsSchema.parse({});
 
-/**
- * Cria o schema de variações usando o limite dinâmico de app_settings.
- */
-export function makeVariationSettingsSchema(maxVariations: number) {
-  const minMax = (min: number, max: number) =>
-    z
-      .object({
-        min: z.number().finite().min(min).max(max),
-        max: z.number().finite().min(min).max(max),
-      })
-      .refine((v) => v.min <= v.max, {
-        message: "O valor mínimo não pode ser maior que o máximo.",
-      });
-
-  return z.object({
-    brightness: minMax(-0.2, 0.2),
-    contrast: minMax(0.8, 1.2),
-    saturation: minMax(0.8, 1.2),
-    temperature: minMax(-15, 15),
-    scale: minMax(1.0, 1.1),
-    watermark_position_jitter: z.boolean().default(false),
-    variation_count: z
-      .number()
-      .int()
-      .min(1)
-      .max(Math.max(1, Math.min(100, maxVariations))),
-  });
-}
-
-export type VariationSettings = z.infer<ReturnType<typeof makeVariationSettingsSchema>>;
-
-export const DEFAULT_VARIATION_SETTINGS: VariationSettings = {
-  brightness: { min: -0.05, max: 0.05 },
-  contrast: { min: 0.95, max: 1.05 },
-  saturation: { min: 0.95, max: 1.05 },
-  temperature: { min: -5, max: 5 },
-  scale: { min: 1.0, max: 1.03 },
-  watermark_position_jitter: false,
-  variation_count: 3,
-};
+export const CONTRACT_VERSION = 2 as const;
 
 export const RIGHTS_CONFIRMATION_VERSION = "1.0";
 export const RIGHTS_CONFIRMATION_TEXT =
