@@ -7,7 +7,6 @@ import { DEFAULT_APP_SETTINGS, type AppSettings } from "./app-settings.functions
 import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
 import { isUploadExpired, validateStorageObject } from "./project-files-validation";
 
-
 type SB = SupabaseClient<Database>;
 
 function clientError(msg: string): Error {
@@ -139,7 +138,6 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
     }
 
-
     const UPLOAD_TTL_SECONDS = 60 * 15;
     const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
 
@@ -181,7 +179,6 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       upload_expires_at: uploadExpiresAt,
     };
   });
-
 
 // ----- confirmar upload: valida objeto e transiciona pending → uploaded -----
 const confirmSchema = z.object({
@@ -249,7 +246,6 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
       throw clientError("Tamanho do arquivo divergente do declarado.");
     }
     if (validation === "mime_mismatch") {
-
       throw clientError("Tipo do arquivo divergente do declarado.");
     }
 
@@ -264,7 +260,6 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     }
     return { id: row.id };
   });
-
 
 // ----- excluir arquivo -----
 export const deleteProjectFile = createServerFn({ method: "POST" })

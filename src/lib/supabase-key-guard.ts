@@ -7,9 +7,7 @@
  * the payload. Neither belongs anywhere near the browser.
  */
 
-export type KeyGuardResult =
-  | { ok: true }
-  | { ok: false; reason: "sb_secret" | "service_role_jwt" };
+export type KeyGuardResult = { ok: true } | { ok: false; reason: "sb_secret" | "service_role_jwt" };
 
 function decodeJwtPayload(jwt: string): string | null {
   const parts = jwt.split(".");
@@ -45,9 +43,7 @@ export function assertSupabaseKeyIsPublishable(raw: unknown, source = "supabase 
   const result = inspectSupabaseKey(raw);
   if (result.ok) return;
   if (result.reason === "sb_secret") {
-    throw new Error(
-      `SECURITY: ${source} looks like a secret key (sb_secret_*). Refusing to boot.`,
-    );
+    throw new Error(`SECURITY: ${source} looks like a secret key (sb_secret_*). Refusing to boot.`);
   }
   throw new Error(`SECURITY: ${source} is a service_role JWT. Refusing to boot.`);
 }

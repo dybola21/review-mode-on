@@ -127,7 +127,6 @@ export function ProjectFilesSection({
         },
       });
 
-
       updateItem(item.key, { status: "done", progress: 100 });
       qc.invalidateQueries({ queryKey: ["project-files", projectId] });
       qc.invalidateQueries({ queryKey: ["project-rights", projectId] });
