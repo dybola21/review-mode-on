@@ -115,6 +115,13 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       throw clientError("A extensão não corresponde ao tipo do arquivo.");
     }
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Cleanup ANTES da contagem: expira pendências vencidas globalmente e
+    // remove objetos órfãos do Storage deste projeto, para não bloquear o
+    // limite por lixo antigo.
+    await cleanupExpiredProjectFiles(supabaseAdmin, data.project_id);
+
     // Limite de quantidade — só conta arquivos confirmados + pendentes ativos.
     const { count, error: countError } = await context.supabase
       .from("project_files")
@@ -132,15 +139,6 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const bucket = BUCKETS[data.file_type];
     const fileId = crypto.randomUUID();
     const storagePath = `${context.userId}/${data.project_id}/${fileId}/${safeName}`;
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // Opportunistic cleanup: expira pendências vencidas antes de reservar nova.
-    try {
-      await supabaseAdmin.rpc("expire_pending_project_files");
-    } catch (e) {
-      console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
-    }
 
     const UPLOAD_TTL_SECONDS = 60 * 15;
     const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
