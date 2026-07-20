@@ -14,7 +14,7 @@ const outputSchema = z.object({
 const webhookSchema = z.object({
   eventId: z.string().min(1).max(200),
   eventType: z.string().min(1).max(120),
-  timestamp: z.string().min(1).max(60),
+  timestamp: z.number().int().nonnegative().max(9_999_999_999),
   jobId: z.string().uuid(),
   workerJobId: z.string().min(1).max(200),
   status: z.enum(["queued", "processing", "completed", "failed", "cancelled", "expired"]),
@@ -133,9 +133,23 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         }
         const parsed = webhookSchema.safeParse(payloadJson);
         if (!parsed.success) {
+          console.warn(
+            JSON.stringify({
+              event: "worker_webhook_invalid_payload",
+              issues: parsed.error.issues.map((i) => ({
+                path: i.path.join("."),
+                code: i.code,
+              })),
+            }),
+          );
           return new Response("Invalid payload", { status: 400 });
         }
         const evt = parsed.data;
+
+        // Body timestamp must match the signed header timestamp exactly.
+        if (String(evt.timestamp) !== timestamp) {
+          return new Response("Unauthorized", { status: 401 });
+        }
 
         let supabaseAdmin: AdminLike;
         try {
