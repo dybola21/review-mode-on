@@ -366,7 +366,10 @@ describe("worker-webhook timestamp contract", () => {
   });
 
   it("processing transitions queued → processing (200)", async () => {
-    const res = await invoke(buildAdmin({ storageExists: true }), buildRequest(processingPayload()));
+    const res = await invoke(
+      buildAdmin({ storageExists: true }),
+      buildRequest(processingPayload()),
+    );
     expect(res.status).toBe(200);
   });
 
