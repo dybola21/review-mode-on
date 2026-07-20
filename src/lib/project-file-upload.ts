@@ -2,7 +2,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useCallback } from "react";
 import { confirmProjectFile, prepareProjectFileUpload } from "@/lib/project-files.functions";
 
-export type ProjectFileType = "source_video" | "logo" | "template_asset" | "music";
+export type ProjectFileType = "source_video" | "logo" | "template_asset";
 
 export type UploadPhase = "queued" | "uploading" | "confirming" | "done" | "error" | "canceled";
 

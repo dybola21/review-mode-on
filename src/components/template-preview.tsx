@@ -5,6 +5,7 @@ type Props = {
   template: TemplateSettings;
   headerUrl?: string | null;
   logoUrl?: string | null;
+  videoUrl?: string | null;
   onPositionChange?: (pos: { x: number; y: number }) => void;
   interactive?: boolean;
 };
@@ -25,6 +26,7 @@ export function TemplatePreview9x16({
   template,
   headerUrl,
   logoUrl,
+  videoUrl,
   onPositionChange,
   interactive,
 }: Props) {
@@ -165,9 +167,23 @@ export function TemplatePreview9x16({
           className="relative bg-black/60"
           style={{ height: `${(1 - template.header_height_ratio) * 100}%` }}
         >
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[10px] uppercase tracking-widest text-white/40">Vídeo 9:16</span>
-          </div>
+          {videoUrl ? (
+            <video
+              key={videoUrl}
+              src={videoUrl}
+              className="absolute inset-0 h-full w-full object-cover"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-[10px] uppercase tracking-widest text-white/40">
+                Vídeo 9:16
+              </span>
+            </div>
+          )}
 
           {/* Marca d'água (opcional, sobre o vídeo) */}
           {logoUrl && (
