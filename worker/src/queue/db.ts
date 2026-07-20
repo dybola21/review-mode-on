@@ -217,6 +217,23 @@ export class QueueDB {
     return res.changes;
   }
 
+  /**
+   * Move a job back to `queued` after a transient recovery failure (e.g. the
+   * app was unreachable while verifying already-uploaded outputs). Preserves
+   * attempt_count and every row in `uploaded_outputs` so the next run only
+   * re-processes what is genuinely missing. Never marks the job as failed
+   * and never emits a failed webhook.
+   */
+  requeueForRecovery(workerJobId: string): void {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `UPDATE jobs SET status = 'queued', updated_at = ?
+           WHERE worker_job_id = ? AND status IN ('processing','recovery_pending')`,
+      )
+      .run(now, workerJobId);
+  }
+
   recordUploadedOutput(
     workerJobId: string,
     workerOutputId: string,
