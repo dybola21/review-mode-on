@@ -381,7 +381,10 @@ export type Database = {
     }
     Functions: {
       expire_pending_project_files: { Args: never; Returns: number }
-      finalize_render_job: { Args: { _job_id: string }; Returns: boolean }
+      finalize_render_job: {
+        Args: { _job_id: string; _outputs: Json; _worker_job_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
