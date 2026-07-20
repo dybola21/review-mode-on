@@ -103,8 +103,9 @@ export const Route = createFileRoute("/api/public/worker-verify-output")({
         const nonceKey = `verify-output:${nonce}`;
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: nErr } = (await (supabaseAdmin.from("worker_request_nonces") as any)
-            .insert({ nonce: nonceKey, purpose: "verify_output" })) as { error: unknown };
+          const { error: nErr } = (await (
+            supabaseAdmin.from("worker_request_nonces") as any
+          ).insert({ nonce: nonceKey, purpose: "verify_output" })) as { error: unknown };
           if (nErr) {
             const code = (nErr as { code?: string }).code;
             if (code === "23505") {
