@@ -230,6 +230,7 @@ export async function runJob(
         throw new RenderError("invalid_job", "sourceFileId não encontrado nos inputs.");
       }
 
+      db.setStage(row.worker_job_id, "rendering");
       log.info(
         { sourceFileId: target.sourceFileId, workerOutputId: target.workerOutputId },
         "render_started",
@@ -281,6 +282,7 @@ export async function runJob(
         "render_completed",
       );
 
+      db.setStage(row.worker_job_id, "uploading");
       log.info({ workerOutputId: target.workerOutputId }, "upload_started");
       await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg, jobCancel.signal);
       log.info({ workerOutputId: target.workerOutputId }, "upload_completed");
