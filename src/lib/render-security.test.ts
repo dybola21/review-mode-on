@@ -241,6 +241,11 @@ describe("validateRenderInput", () => {
     expect(validateRenderInput({ ...base, user_id: "other" }, u, p)).toBe("wrong_owner");
     expect(validateRenderInput({ ...base, project_id: "other" }, u, p)).toBe("wrong_project");
   });
+  it("rejects missing user_id or project_id (server-verified fields)", () => {
+    expect(validateRenderInput({ ...base, user_id: null }, u, p)).toBe("wrong_owner");
+    expect(validateRenderInput({ ...base, project_id: null }, u, p)).toBe("wrong_project");
+  });
+
   it("rejects invalid file_type", () => {
     expect(validateRenderInput({ ...base, file_type: "junk" }, u, p)).toBe("invalid_type");
   });
