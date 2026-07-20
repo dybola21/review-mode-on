@@ -62,6 +62,29 @@ function ResultsPage() {
     }
   };
 
+  const downloadAll = async () => {
+    const items = query.data ?? [];
+    if (items.length === 0) return;
+    toast.info(`Iniciando download de ${items.length} arquivo(s)…`);
+    // Sequencial, sem baixar tudo para a memória: cada URL assinada é
+    // aberta em nova aba e o browser gerencia o download.
+    for (const o of items) {
+      const expired = o.expires_at && new Date(o.expires_at) < new Date();
+      if (expired) continue;
+      try {
+        const { url } = await urlFn({ data: { output_id: o.id } });
+        const a = document.createElement("a");
+        a.href = url;
+        a.rel = "noopener";
+        a.click();
+        await new Promise((r) => setTimeout(r, 600));
+      } catch (e) {
+        toast.error(`Falhou: ${o.file_name}`);
+        console.error(e);
+      }
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-10">
       <Link
