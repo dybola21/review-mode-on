@@ -196,8 +196,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
 
     const jobId = "11111111-1111-1111-1111-111111111111";
     const outId = "22222222-2222-2222-2222-222222222222";
-    const params = computeVariationParams(jobId, outId, 1, VARIATION);
-    const jitter = computeWatermarkOffset(jobId, outId, 1, true, 40);
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -208,9 +206,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         watermarkSize: assets.watermarkSize,
         watermarkPosition: TEMPLATE.watermark_position,
         watermarkOpacity: TEMPLATE.watermark_opacity,
-        watermarkJitter: jitter,
         outputPath: out,
-        variation: params,
         targetWidth: W,
         targetHeight: H,
         headerHeight: assets.layout.headerHeight,
@@ -391,8 +387,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
 
     const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-    const params = computeVariationParams(jobId, outId, 1, VARIATION);
-    const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
     const out = path.join(dir, "out.mp4");
     const srcProbe = await ffprobe(src);
     await renderOutput(
@@ -403,9 +397,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
         watermarkSize: assets.watermarkSize,
         watermarkPosition: headerTemplate.watermark_position,
         watermarkOpacity: headerTemplate.watermark_opacity,
-        watermarkJitter: jitter,
         outputPath: out,
-        variation: params,
         targetWidth: W,
         targetHeight: H,
         headerHeight: assets.layout.headerHeight,
@@ -559,8 +551,6 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       });
       const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
       const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-      const params = computeVariationParams(jobId, outId, 1, VARIATION);
-      const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
       const out = path.join(subDir, "out.mp4");
       const srcProbe = await ffprobe(src);
       await renderOutput(
@@ -571,9 +561,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
           watermarkSize: assets.watermarkSize,
           watermarkPosition: tpl.watermark_position,
           watermarkOpacity: tpl.watermark_opacity,
-          watermarkJitter: jitter,
           outputPath: out,
-          variation: params,
           targetWidth: W,
           targetHeight: H,
           headerHeight: assets.layout.headerHeight,
