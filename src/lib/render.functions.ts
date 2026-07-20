@@ -448,37 +448,33 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       }
     };
 
-    // 7) Pre-create output targets (server-owned paths & IDs)
+    // 7) Pre-create output targets — 1:1 com source_video (sem variações).
     type Target = {
       workerOutputId: string;
       fileName: string;
       storagePath: string;
       mimeType: string;
       sourceFileId: string;
-      variationIndex: number;
     };
     const targets: Target[] = [];
     try {
       for (const f of files) {
         const base = sanitizeBaseName((f.file_name ?? "video").replace(/\.[^.]+$/, ""));
-        for (let v = 1; v <= variationCount; v++) {
-          const workerOutputId = crypto.randomUUID();
-          const storagePath = buildOutputStoragePath({
-            userId: context.userId,
-            projectId: data.project_id,
-            jobId,
-            workerOutputId,
-            extension: "mp4",
-          });
-          targets.push({
-            workerOutputId,
-            fileName: `${base}_v${v}.mp4`,
-            storagePath,
-            mimeType: "video/mp4",
-            sourceFileId: f.id,
-            variationIndex: v,
-          });
-        }
+        const workerOutputId = crypto.randomUUID();
+        const storagePath = buildOutputStoragePath({
+          userId: context.userId,
+          projectId: data.project_id,
+          jobId,
+          workerOutputId,
+          extension: "mp4",
+        });
+        targets.push({
+          workerOutputId,
+          fileName: `${base}.mp4`,
+          storagePath,
+          mimeType: "video/mp4",
+          sourceFileId: f.id,
+        });
       }
 
       const { error: tErr } = await supabaseAdmin.from("render_output_targets").insert(
@@ -491,7 +487,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
           storage_path: t.storagePath,
           mime_type: t.mimeType,
           source_file_id: t.sourceFileId,
-          variation_index: t.variationIndex,
+          // Legacy schema field kept for compatibility — always 1 in v2.
+          variation_index: 1,
         })),
       );
       if (tErr) throw new Error(`targets insert: ${tErr.message}`);
