@@ -250,8 +250,11 @@ export function validateRenderInput(
   projectId: string,
 ): RenderInputRejection | null {
   if (file.status !== "uploaded") return "not_uploaded";
-  if (file.user_id && file.user_id !== userId) return "wrong_owner";
-  if (file.project_id && file.project_id !== projectId) return "wrong_project";
+  // Row ownership is server-verified — require the fields to be present and
+  // match the caller's identity. Absent user_id/project_id is a hard reject.
+  if (!file.user_id || file.user_id !== userId) return "wrong_owner";
+  if (!file.project_id || file.project_id !== projectId) return "wrong_project";
+
   if (!bucketForFileType(file.file_type)) return "invalid_type";
   if (!isValidInputStoragePath(file.storage_path, userId, projectId)) return "invalid_path";
   if (!mimeAllowedForFileType(file.file_type, file.mime_type)) return "invalid_mime";
