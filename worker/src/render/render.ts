@@ -25,6 +25,17 @@ const OUT_W = 1080;
 const OUT_H = 1920;
 const DEFAULT_CRF = 22;
 
+// Hard wall-clock ceiling for any single job. The effective cap is
+// min(cfg.MAX_JOB_DURATION_SECONDS, JOB_HARD_MAX_MS/1000).
+const JOB_HARD_MAX_MS = 10 * 60 * 1000; // 10 minutes
+
+// Upload attempt policy (per-target).
+const UPLOAD_ATTEMPT_TIMEOUT_MS = 120_000; // 120s per attempt
+const UPLOAD_MAX_ATTEMPTS = 2;
+
+// Progress webhook cadence during ffmpeg.
+const PROGRESS_WEBHOOK_INTERVAL_MS = 3_000;
+
 /**
  * v2 pipeline: sequential 1 header art + N source videos → N outputs.
  * Every output is tied to exactly one sourceFileId. No variation filters.
@@ -65,7 +76,25 @@ export async function runJob(
   await fs.mkdir(outputDir, { recursive: true });
   await fs.mkdir(assetsDir, { recursive: true });
 
-  const heartbeat = new WallClockLimit(cfg.MAX_JOB_DURATION_SECONDS * 1000);
+  // ---------------------------------------------------------------
+  // Wire the global job cancellation:
+  //  - external `cancel` (worker shutdown)
+  //  - wall-clock ceiling (JOB_HARD_MAX_MS ∩ cfg.MAX_JOB_DURATION_SECONDS)
+  // Any of them fires the same `jobCancel` AbortController, which is passed
+  // to render, upload and renew-driven retries.
+  // ---------------------------------------------------------------
+  const jobCancel = new AbortController();
+  const jobHardMs = Math.min(cfg.MAX_JOB_DURATION_SECONDS * 1000, JOB_HARD_MAX_MS);
+  const timedOut = { value: false };
+  const wallTimer = setTimeout(() => {
+    timedOut.value = true;
+    jobCancel.abort();
+  }, jobHardMs);
+  const shutdownForward = () => jobCancel.abort();
+  if (cancel.aborted) jobCancel.abort();
+  else cancel.addEventListener("abort", shutdownForward, { once: true });
+
+  const heartbeat = new WallClockLimit(jobHardMs);
 
   log.info(
     { inputs: payload.inputFiles.length, outputs: payload.outputTargets.length },
@@ -85,7 +114,7 @@ export async function runJob(
     const localById = new Map<string, { path: string; input: InputFile }>();
 
     for (const inp of payload.inputFiles) {
-      cancel.throwIfAborted();
+      jobCancel.signal.throwIfAborted();
       heartbeat.check();
       const dl = await downloadWithRenew(inp, inputDir, payload, row.worker_job_id, cfg);
       const probe = await ffprobe(dl.localPath);
@@ -112,25 +141,27 @@ export async function runJob(
       logoPath = logoEntry.path;
     }
 
-    let headerImagePath: string | null = null;
+    // v2: header_image_file_id is required. Contract already asserts it,
+    // but re-check locally as a defence-in-depth.
+    if (!template.header_image_file_id) {
+      throw new RenderError("header_image_invalid", "Arte do cabeçalho é obrigatória.");
+    }
+    const headerEntry = localById.get(template.header_image_file_id);
+    if (!headerEntry) {
+      throw new RenderError("header_image_invalid", "Arte do cabeçalho não foi enviada.");
+    }
+    if (!headerEntry.input.mimeType.startsWith("image/")) {
+      throw new RenderError("header_image_invalid", "Arte do cabeçalho não é uma imagem.");
+    }
+    const headerImagePath = headerEntry.path;
     let headerImageNaturalSize: { w: number; h: number } | null = null;
-    if (template.header_image_file_id) {
-      const headerEntry = localById.get(template.header_image_file_id);
-      if (!headerEntry) {
-        throw new RenderError("header_image_invalid", "Arte do cabeçalho não foi enviada.");
+    try {
+      const probe = await ffprobe(headerImagePath);
+      if (probe.width && probe.height && probe.width > 0 && probe.height > 0) {
+        headerImageNaturalSize = { w: probe.width, h: probe.height };
       }
-      if (!headerEntry.input.mimeType.startsWith("image/")) {
-        throw new RenderError("header_image_invalid", "Arte do cabeçalho não é uma imagem.");
-      }
-      headerImagePath = headerEntry.path;
-      try {
-        const probe = await ffprobe(headerImagePath);
-        if (probe.width && probe.height && probe.width > 0 && probe.height > 0) {
-          headerImageNaturalSize = { w: probe.width, h: probe.height };
-        }
-      } catch {
-        headerImageNaturalSize = null;
-      }
+    } catch {
+      headerImageNaturalSize = null;
     }
 
     const overlay = await buildTemplateOverlay({
@@ -154,7 +185,7 @@ export async function runJob(
     let processedCount = 0;
 
     for (const target of payload.outputTargets) {
-      cancel.throwIfAborted();
+      jobCancel.signal.throwIfAborted();
       heartbeat.check();
 
       if (alreadyUploaded.has(target.workerOutputId)) {
@@ -163,7 +194,7 @@ export async function runJob(
           payload.jobId,
           row.worker_job_id,
           target.workerOutputId,
-          cancel,
+          jobCancel.signal,
         );
         const action = decideRecoveryAction(verified);
         if (action === "abort") {
@@ -186,10 +217,16 @@ export async function runJob(
         throw new RenderError("invalid_job", "sourceFileId não encontrado nos inputs.");
       }
 
-      log.info({ sourceFileId: target.sourceFileId }, "input_started");
+      log.info(
+        { sourceFileId: target.sourceFileId, workerOutputId: target.workerOutputId },
+        "render_started",
+      );
 
       const outLocal = ensureInsideDir(outputDir, `${safeBaseName(target.workerOutputId)}.mp4`);
       const srcProbe = await ffprobe(src.path);
+
+      // Emit "processing" progress webhooks every 3s during ffmpeg.
+      let lastWebhookAt = 0;
       await renderOutput(
         {
           sourceVideoPath: src.path,
@@ -205,19 +242,36 @@ export async function runJob(
           crf: DEFAULT_CRF,
           timeoutMs: cfg.FFMPEG_TIMEOUT_SECONDS * 1000,
           maxDurationSeconds: cfg.MAX_JOB_DURATION_SECONDS,
-          cancel,
+          cancel: jobCancel.signal,
           onProgress: (p) => {
             const fraction = (processedCount + p / 100) / totalTargets;
-            db.updateProgress(
-              row.worker_job_id,
-              Math.min(99, Math.max(1, Math.round(fraction * 100))),
-            );
+            const pct = Math.min(99, Math.max(1, Math.round(fraction * 100)));
+            db.updateProgress(row.worker_job_id, pct);
+            const now = Date.now();
+            if (now - lastWebhookAt >= PROGRESS_WEBHOOK_INTERVAL_MS) {
+              lastWebhookAt = now;
+              enqueueWebhook(db, {
+                eventType: "status_update",
+                jobId: payload.jobId,
+                workerJobId: row.worker_job_id,
+                status: "processing",
+                progress: pct,
+              });
+            }
           },
         },
         srcProbe,
       );
 
-      await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg);
+      log.info(
+        { sourceFileId: target.sourceFileId, workerOutputId: target.workerOutputId },
+        "render_completed",
+      );
+
+      log.info({ workerOutputId: target.workerOutputId }, "upload_started");
+      await uploadWithRenew(outLocal, target, payload, row.worker_job_id, cfg, jobCancel.signal);
+      log.info({ workerOutputId: target.workerOutputId }, "upload_completed");
+
       db.recordUploadedOutput(
         row.worker_job_id,
         target.workerOutputId,
@@ -275,6 +329,21 @@ export async function runJob(
       db.requeueForRecovery(row.worker_job_id);
       return;
     }
+    // Wall-clock ceiling → job_timeout takes precedence over the raw error
+    // code (which is typically "AbortError"-derived from the aborted fetch).
+    if (timedOut.value) {
+      log.warn({ code: "job_timeout", jobHardMs }, "job_failed");
+      fail(db, row, "job_timeout", "Job excedeu duração máxima.");
+      enqueueWebhook(db, {
+        eventType: "status_update",
+        jobId: payload.jobId,
+        workerJobId: row.worker_job_id,
+        status: "failed",
+        progress: 0,
+        errorCode: "job_timeout",
+      });
+      return;
+    }
     const { code, message } = classifyError(err);
     log.warn({ code }, "job_failed");
     fail(db, row, code, message);
@@ -287,6 +356,8 @@ export async function runJob(
       errorCode: code,
     });
   } finally {
+    clearTimeout(wallTimer);
+    cancel.removeEventListener("abort", shutdownForward);
     try {
       await fs.rm(jobRoot, { recursive: true, force: true });
     } catch {
@@ -311,7 +382,7 @@ class WallClockLimit {
   }
   check(): void {
     if (Date.now() > this.deadline) {
-      throw new RenderError("render_timeout", "Job excedeu duração máxima.");
+      throw new RenderError("job_timeout", "Job excedeu duração máxima.");
     }
   }
 }
@@ -349,37 +420,57 @@ async function downloadWithRenew(
   }
 }
 
+/**
+ * Upload retry policy (v2):
+ *  - at most UPLOAD_MAX_ATTEMPTS attempts total
+ *  - each attempt bounded by UPLOAD_ATTEMPT_TIMEOUT_MS
+ *  - external cancel (job wall-clock or shutdown) aborts the in-flight fetch
+ *    AND stops the retry loop immediately.
+ */
 async function uploadWithRenew(
   localPath: string,
   target: JobPayload["outputTargets"][number],
   payload: JobPayload,
   workerJobId: string,
   cfg: Config,
+  cancel: AbortSignal,
 ): Promise<void> {
   let attempt = 0;
   let currentUrl = target.signedUploadUrl;
-  while (true) {
+  let lastErr: unknown = null;
+  while (attempt < UPLOAD_MAX_ATTEMPTS) {
+    if (cancel.aborted) {
+      throw lastErr ?? new UploadError("output_upload_cancelled", "Upload cancelado.", false);
+    }
     attempt += 1;
     try {
       await uploadOutput(localPath, currentUrl, target.mimeType, {
         maxBytes: cfg.MAX_OUTPUT_BYTES,
-        timeoutMs: 15 * 60 * 1000,
+        timeoutMs: UPLOAD_ATTEMPT_TIMEOUT_MS,
         allowedHosts: cfg.ALLOWED_UPLOAD_HOSTS,
         isProduction: cfg.isProduction,
+        cancel,
       });
       return;
     } catch (err) {
-      if (err instanceof UploadError && err.code === "output_upload_expired" && attempt <= 2) {
+      lastErr = err;
+      if (cancel.aborted) throw err;
+      if (
+        err instanceof UploadError &&
+        err.code === "output_upload_expired" &&
+        attempt < UPLOAD_MAX_ATTEMPTS
+      ) {
         currentUrl = await renewUploadUrl(payload, workerJobId, target.workerOutputId, cfg);
         continue;
       }
-      if (err instanceof UploadError && err.transient && attempt <= 3) {
+      if (err instanceof UploadError && err.transient && attempt < UPLOAD_MAX_ATTEMPTS) {
         await sleep(500 * attempt);
         continue;
       }
       throw err;
     }
   }
+  throw lastErr ?? new UploadError("output_upload_failed", "Falha no upload.", true);
 }
 
 function classifyError(err: unknown): { code: string; message: string } {
@@ -404,7 +495,9 @@ export class RecoveryDeferError extends Error {
 }
 
 export type VerifyRetryResult =
-  { kind: "ok"; exists: boolean; size: number } | { kind: "auth" } | { kind: "transient" };
+  | { kind: "ok"; exists: boolean; size: number }
+  | { kind: "auth" }
+  | { kind: "transient" };
 
 export function decideRecoveryAction(
   v: VerifyRetryResult,

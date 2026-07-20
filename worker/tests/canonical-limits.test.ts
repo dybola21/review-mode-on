@@ -10,6 +10,7 @@ const CANONICAL = {
 } as const;
 
 const validTemplate = {
+  header_image_file_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
   page_name: "",
   identifier: "",
   headline: "",

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { CONTRACT_VERSION, jobPayloadSchema } from "../src/types/contract.js";
 
+const HEADER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
 const base = {
   contractVersion: CONTRACT_VERSION,
   jobId: "11111111-1111-1111-1111-111111111111",
@@ -14,6 +16,13 @@ const base = {
       mimeType: "video/mp4",
       signedUrl: "https://files.example.com/src",
     },
+    {
+      fileId: HEADER_ID,
+      fileName: "header.png",
+      fileType: "template_asset" as const,
+      mimeType: "image/png",
+      signedUrl: "https://files.example.com/header",
+    },
   ],
   outputTargets: [
     {
@@ -25,6 +34,7 @@ const base = {
     },
   ],
   templateSettings: {
+    header_image_file_id: HEADER_ID,
     page_name: "",
     identifier: "",
     headline: "",
@@ -114,6 +124,46 @@ describe("jobPayloadSchema (v2)", () => {
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
   });
 
+  it("v2 accepts 1 header art + 1 video with inputs:2 outputs:1", () => {
+    const res = jobPayloadSchema.safeParse(base);
+    expect(res.success).toBe(true);
+    if (res.success) {
+      expect(res.data.inputFiles.length).toBe(2);
+      expect(res.data.outputTargets.length).toBe(1);
+      const templateAssets = res.data.inputFiles.filter((f) => f.fileType === "template_asset");
+      expect(templateAssets.length).toBe(1);
+      expect(templateAssets[0]!.fileId).toBe(res.data.templateSettings.header_image_file_id);
+    }
+  });
+
+  it("rejects when header_image_file_id is missing", () => {
+    const bad = {
+      ...base,
+      templateSettings: { ...base.templateSettings, header_image_file_id: undefined },
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects when no template_asset input matches header_image_file_id", () => {
+    const bad = {
+      ...base,
+      // Keep only the source_video — drop the header template_asset input.
+      inputFiles: [base.inputFiles[0]!],
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
+  it("rejects when template_asset input exists but header_image_file_id points elsewhere", () => {
+    const bad = {
+      ...base,
+      templateSettings: {
+        ...base.templateSettings,
+        header_image_file_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      },
+    };
+    expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
+  });
+
   it("accepts 1 header art + 5 sources -> 5 outputs", () => {
     const sources = Array.from({ length: 5 }, (_, i) => ({
       fileId: `88888888-8888-8888-8888-${String(i).padStart(12, "0")}`,
@@ -136,7 +186,12 @@ describe("jobPayloadSchema (v2)", () => {
       signedUploadUrl: `https://files.example.com/out${i}`,
       sourceFileId: s.fileId,
     }));
-    const ok = { ...base, inputFiles: [header, ...sources], outputTargets: targets };
+    const ok = {
+      ...base,
+      inputFiles: [header, ...sources],
+      outputTargets: targets,
+      templateSettings: { ...base.templateSettings, header_image_file_id: header.fileId },
+    };
     expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
   });
 
@@ -148,6 +203,13 @@ describe("jobPayloadSchema (v2)", () => {
       mimeType: "video/mp4",
       signedUrl: `https://files.example.com/src${i}`,
     }));
+    const header = {
+      fileId: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      fileName: "header.png",
+      fileType: "template_asset" as const,
+      mimeType: "image/png",
+      signedUrl: "https://files.example.com/header",
+    };
     const targets = sources.map((s, i) => ({
       workerOutputId: `99999999-9999-9999-9999-${String(i).padStart(12, "0")}`,
       fileName: s.fileName,
@@ -155,7 +217,12 @@ describe("jobPayloadSchema (v2)", () => {
       signedUploadUrl: `https://files.example.com/out${i}`,
       sourceFileId: s.fileId,
     }));
-    const bad = { ...base, inputFiles: sources, outputTargets: targets };
+    const bad = {
+      ...base,
+      inputFiles: [header, ...sources],
+      outputTargets: targets,
+      templateSettings: { ...base.templateSettings, header_image_file_id: header.fileId },
+    };
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
   });
 });

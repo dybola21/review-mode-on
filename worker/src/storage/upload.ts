@@ -17,11 +17,16 @@ interface UploadOptions {
   timeoutMs: number;
   allowedHosts: readonly string[];
   isProduction: boolean;
+  /** External cancellation signal (job wall-clock or worker shutdown). */
+  cancel?: AbortSignal;
 }
 
 /**
  * Upload a local file to a signed upload URL owned by the app server. We
  * never mutate the destination — the URL is used verbatim.
+ *
+ * The local per-attempt timeout AND the external `cancel` signal are wired
+ * into the same AbortController, so any of them aborts the fetch.
  */
 export async function uploadOutput(
   localPath: string,
@@ -44,6 +49,11 @@ export async function uploadOutput(
   }
 
   const controller = new AbortController();
+  const onExternalAbort = () => controller.abort();
+  if (opts.cancel) {
+    if (opts.cancel.aborted) controller.abort();
+    else opts.cancel.addEventListener("abort", onExternalAbort, { once: true });
+  }
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
   const stream = fs.createReadStream(localPath);
   let res: Response;
@@ -61,12 +71,14 @@ export async function uploadOutput(
     res = await fetch(url, init);
   } catch (err) {
     clearTimeout(timer);
+    if (opts.cancel) opts.cancel.removeEventListener("abort", onExternalAbort);
     if ((err as { name?: string })?.name === "AbortError") {
       throw new UploadError("output_upload_timeout", "Timeout no upload.", true);
     }
     throw new UploadError("output_upload_failed", "Falha no upload.", true);
   } finally {
     clearTimeout(timer);
+    if (opts.cancel) opts.cancel.removeEventListener("abort", onExternalAbort);
   }
 
   if (res.status === 401 || res.status === 403) {
