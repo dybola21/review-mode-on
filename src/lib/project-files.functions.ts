@@ -5,6 +5,8 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./app-settings.functions";
 import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
+import { isUploadExpired, validateStorageObject } from "./project-files-validation";
+
 
 type SB = SupabaseClient<Database>;
 
