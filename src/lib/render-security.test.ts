@@ -1,16 +1,21 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it } from "vitest";
 import {
+  bucketForFileType,
   buildOutputStoragePath,
   computeMaxOutputs,
   computeSignature,
   isPathUnderJob,
   isTimestampFresh,
+  isValidInputStoragePath,
   MAX_WEBHOOK_AGE_SECONDS,
+  mimeAllowedForFileType,
   normalizePublicAppUrl,
   publicAppUrlSchema,
   sanitizeBaseName,
+  validateRenderInput,
   verifySignature,
 } from "./render-security";
+
 
 const SECRET = "test-secret-abc-123";
 
