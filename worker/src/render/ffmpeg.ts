@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { ffprobe, type ProbeInfo } from "../storage/download.js";
-import type { VariationParams } from "./variation.js";
 
 export class RenderError extends Error {
   constructor(
@@ -22,9 +21,7 @@ export interface RenderArgs {
   watermarkSize: { w: number; h: number } | null;
   watermarkPosition: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   watermarkOpacity: number; // 0..1
-  watermarkJitter: { dx: number; dy: number };
   outputPath: string;
-  variation: VariationParams;
   targetWidth: number;
   targetHeight: number;
   headerHeight: number;
@@ -35,7 +32,6 @@ export interface RenderArgs {
   cancel?: AbortSignal;
 }
 
-// Track running children so shutdown can kill them.
 const RUNNING = new Set<ChildProcess>();
 export function killAllRunning(signal: NodeJS.Signals = "SIGTERM"): void {
   for (const c of RUNNING) {
@@ -47,36 +43,25 @@ export function killAllRunning(signal: NodeJS.Signals = "SIGTERM"): void {
   }
 }
 
-export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promise<void> {
-  fs.mkdirSync(path.dirname(a.outputPath), { recursive: true });
-
+/**
+ * Build the ffmpeg argv for a single source→output render. Exported so tests
+ * can assert that no variation filters (`eq`, `colorbalance`, jitter) appear.
+ * The video is scaled and center-cropped to exactly fill the area under the
+ * header. Audio is preserved when present, dropped when absent.
+ */
+export function buildFfmpegArgs(a: RenderArgs, sourceProbe: ProbeInfo): string[] {
   const W = a.targetWidth;
   const H = a.targetHeight;
   const headerH = Math.max(0, Math.min(H, a.headerHeight));
   const videoH = H - headerH;
-  const scaleFactor = a.variation.scale;
 
-  // Scale + crop the source so it fully covers the video area, then zoom
-  // slightly using scaleFactor. No letterboxing — matches the preview.
-  const scaledW = Math.round(W * scaleFactor);
-  const scaledVideoH = Math.round(videoH * scaleFactor);
+  // Scale + centered crop to fully cover the remaining video area — no
+  // letterboxing, no per-output variation.
   const videoFit =
-    `scale=w=${scaledW}:h=${scaledVideoH}:force_original_aspect_ratio=increase,` +
-    `crop=${W}:${videoH}`;
-
-  const eq =
-    `eq=brightness=${fmt(a.variation.brightness)}:` +
-    `contrast=${fmt(a.variation.contrast)}:` +
-    `saturation=${fmt(a.variation.saturation)}`;
-
-  const tempShift = fmt(a.variation.temperatureShift);
-  const colorAdjust = `colorbalance=rs=${tempShift}:bs=${fmt(-a.variation.temperatureShift)}`;
-
-  // Add header space above the video (transparent — real header text/logo
-  // comes from the overlay PNG rendered on top).
+    `scale=w=${W}:h=${videoH}:force_original_aspect_ratio=increase,` + `crop=${W}:${videoH}`;
   const padOp = headerH > 0 ? `,pad=${W}:${H}:0:${headerH}:color=black` : "";
 
-  const base = `[0:v]${videoFit},${eq},${colorAdjust}${padOp},format=yuv420p[vbase]`;
+  const base = `[0:v]${videoFit}${padOp},format=yuv420p[vbase]`;
   const filters: string[] = [base];
   let lastVideoLabel = "[vbase]";
   const inputs: string[] = ["-i", a.sourceVideoPath];
@@ -113,8 +98,8 @@ export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promi
         y = H - wm.h - margin;
         break;
     }
-    x = clampInt(x + a.watermarkJitter.dx, 0, W - wm.w);
-    y = clampInt(y + a.watermarkJitter.dy, headerH, H - wm.h);
+    x = clampInt(x, 0, W - wm.w);
+    y = clampInt(y, headerH, H - wm.h);
     const opacity = Math.max(0, Math.min(1, a.watermarkOpacity));
     filters.push(`[${nextInputIdx}:v]format=rgba,colorchannelmixer=aa=${fmt(opacity)}[wmop]`);
     filters.push(`${lastVideoLabel}[wmop]overlay=${x}:${y}:format=auto[vout]`);
@@ -122,14 +107,18 @@ export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promi
     nextInputIdx++;
   }
 
-  // Audio: music is intentionally NOT part of this contract version.
+  // Preserve audio when present; otherwise emit a video-only file.
   const audioArgs = sourceProbe.hasAudio
     ? ["-map", "0:a?", "-c:a", "aac", "-b:a", "160k"]
     : ["-an"];
 
   const filterComplex = filters.join(";");
+  const duration = Math.min(
+    sourceProbe.durationSeconds || a.maxDurationSeconds,
+    a.maxDurationSeconds,
+  );
 
-  const args: string[] = [
+  return [
     "-y",
     "-nostdin",
     "-hide_banner",
@@ -154,9 +143,14 @@ export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promi
     "-movflags",
     "+faststart",
     "-t",
-    String(Math.min(sourceProbe.durationSeconds || a.maxDurationSeconds, a.maxDurationSeconds)),
+    String(duration),
     a.outputPath,
   ];
+}
+
+export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promise<void> {
+  fs.mkdirSync(path.dirname(a.outputPath), { recursive: true });
+  const args = buildFfmpegArgs(a, sourceProbe);
 
   await runFfmpeg(args, {
     timeoutMs: a.timeoutMs,
@@ -165,7 +159,6 @@ export async function renderOutput(a: RenderArgs, sourceProbe: ProbeInfo): Promi
     cancel: a.cancel,
   });
 
-  // Verify output
   let outProbe: ProbeInfo;
   try {
     outProbe = await ffprobe(a.outputPath);
@@ -210,7 +203,6 @@ interface RunOpts {
 
 function runFfmpeg(args: string[], opts: RunOpts): Promise<void> {
   return new Promise((resolve, reject) => {
-    // Never build FFmpeg command as string; args array + shell: false.
     const child = spawn("ffmpeg", args, { shell: false });
     RUNNING.add(child);
 
@@ -231,7 +223,6 @@ function runFfmpeg(args: string[], opts: RunOpts): Promise<void> {
     let lastEmit = 0;
     child.stdout.on("data", (buf: Buffer) => {
       const s = buf.toString();
-      // ffmpeg -progress emits key=value lines. We only care about out_time_ms.
       const m = s.match(/out_time_ms=(\d+)/g);
       if (!m || !opts.durationSeconds || !opts.onProgress) return;
       const last = m[m.length - 1];
@@ -255,7 +246,7 @@ function runFfmpeg(args: string[], opts: RunOpts): Promise<void> {
     });
     child.on("close", (code, signal) => {
       cleanup();
-      if (signal === "SIGKILL") return; // timeout already rejected
+      if (signal === "SIGKILL") return;
       if (code === 0) resolve();
       else reject(new RenderError("render_failed", "Render falhou."));
     });
@@ -264,7 +255,6 @@ function runFfmpeg(args: string[], opts: RunOpts): Promise<void> {
       clearTimeout(timer);
       RUNNING.delete(child);
       opts.cancel?.removeEventListener("abort", abortHandler);
-      // Keep errTail for internal logging; do NOT surface raw output.
       void errTail;
     }
   });
