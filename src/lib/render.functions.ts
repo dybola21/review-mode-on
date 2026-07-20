@@ -557,6 +557,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       fileName: string;
       mimeType: string;
       signedUploadUrl: string;
+      sourceFileId: string;
     };
     let outputTargets: OutputTargetPayload[];
     try {
@@ -571,6 +572,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
             fileName: t.fileName,
             mimeType: t.mimeType,
             signedUploadUrl: signed.signedUrl,
+            sourceFileId: t.sourceFileId,
           };
         }),
       );
@@ -588,17 +590,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     logSubmit("signed_urls_created", { projectId: data.project_id, jobId });
 
-    // 10) Send job to worker. templateSettings references assets by
-    //     fileId only — never storagePath or signed URL.
+    // 10) Send job to worker (v2). templateSettings references assets by
+    //     fileId only — never storagePath or signed URL. Sem variações.
     const payload = {
+      contractVersion: CONTRACT_VERSION,
       jobId,
       projectId: data.project_id,
       callbackUrl,
       inputFiles: signedInputs,
       outputTargets,
       templateSettings: project.template_settings,
-      variationSettings: project.variation_settings,
-      variationCount,
       uploadTtlSeconds: SIGNED_UPLOAD_TTL_SECONDS,
     };
 
