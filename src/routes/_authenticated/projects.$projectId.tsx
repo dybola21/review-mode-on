@@ -182,7 +182,13 @@ function EditProjectPage() {
             settings={settingsQuery.data}
           />
           <RightsSection projectId={projectId} />
-          <RenderSection projectId={projectId} />
+          <RenderSection
+            projectId={projectId}
+            hasHeaderArt={
+              typeof (project.template_settings as { header_image_file_id?: string | null })
+                ?.header_image_file_id === "string"
+            }
+          />
         </div>
       )}
 
