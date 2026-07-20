@@ -48,7 +48,7 @@ ENV PORT=3000 \
     TEMP_DIR=/tmp/editor-worker
 
 EXPOSE 3000
-VOLUME ["/data"]
+
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+ (process.env.PORT||3000) +'/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
