@@ -2,7 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { CONTRACT_VERSION, RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
+import {
+  CONTRACT_VERSION,
+  RIGHTS_CONFIRMATION_VERSION,
+  renderTemplateSettingsSchema,
+} from "./project-schemas";
 import {
   bucketForFileType,
   buildOutputStoragePath,
