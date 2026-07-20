@@ -4,11 +4,14 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
 import {
+  bucketForFileType,
   buildOutputStoragePath,
   computeMaxOutputs,
   normalizePublicAppUrl,
   sanitizeBaseName,
+  validateRenderInput,
 } from "./render-security";
+
 
 function clientError(msg: string): Error {
   return new Error(msg);
@@ -301,8 +304,8 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Já existe um processamento em andamento.");
     }
 
-    // 5) Compute expected outputs
-    // variationCount MUST equal variationSettings.variation_count (worker contract enforces).
+    // 5) Compute expected outputs (raw product — HARD_MAX enforced BEFORE
+    //    any write: no job, no targets, no signed URLs when 401+.).
     const variationFromSettings = Number(
       (project.variation_settings as { variation_count?: unknown } | null)?.variation_count,
     );
@@ -312,15 +315,42 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         ? Math.floor(variationFromSettings)
         : Number(project.variation_count) || 1,
     );
-    const totalOutputs = computeMaxOutputs(files.length, variationCount, HARD_MAX_OUTPUTS);
+    const totalOutputs = computeMaxOutputs(files.length, variationCount);
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
     if (totalOutputs > HARD_MAX_OUTPUTS) {
-      throw clientError("Combinação de arquivos e variações excede o limite permitido.");
+      throw clientError(
+        `Combinação de arquivos e variações excede o limite de ${HARD_MAX_OUTPUTS} saídas.`,
+      );
+    }
+
+    // 5b) Validate every input file BEFORE we write anything. This closes
+    //     the pre-write door: no job, no targets, no signed URLs unless
+    //     every input passes the render invariants.
+    const allInputsForValidation = [...files, ...assetFiles];
+    for (const f of allInputsForValidation) {
+      const reason = validateRenderInput(
+        {
+          id: f.id,
+          user_id: context.userId,
+          project_id: data.project_id,
+          status: (f as { status?: string }).status ?? "uploaded",
+          file_type: f.file_type,
+          mime_type: f.mime_type,
+          storage_path: f.storage_path,
+        },
+        context.userId,
+        data.project_id,
+      );
+      if (reason) {
+        console.error("[submitRenderJob] input invalid", { id: f.id, reason });
+        throw clientError("Um dos arquivos do projeto está inválido para renderização.");
+      }
     }
 
     // 6) Create job
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let jobId: string;
@@ -416,24 +446,22 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       mimeType: string;
       signedUrl: string;
     };
-    const ALLOWED_INPUT_TYPES = new Set(["source_video", "logo", "template_asset"]);
-    const BUCKET_BY_TYPE: Record<string, string> = {
-      source_video: "project-inputs",
-      logo: "project-assets",
-      template_asset: "project-assets",
-    };
+    // Bucket comes from the shared server-canonical map, not from a
+    // client-supplied hint. Validation ran in step 5b already.
+
     let signedInputs: SignedInput[];
     try {
       const allInputs = [...files, ...assetFiles];
       signedInputs = await Promise.all(
         allInputs.map(async (f) => {
-          if (!ALLOWED_INPUT_TYPES.has(f.file_type)) {
+          const bucket = bucketForFileType(f.file_type);
+          if (!bucket) {
             throw new Error(`invalid file_type: ${f.file_type}`);
           }
-          const bucket = BUCKET_BY_TYPE[f.file_type];
           const { data: signed, error: sErr } = await supabaseAdmin.storage
             .from(bucket)
             .createSignedUrl(f.storage_path, SIGNED_INPUT_TTL_SECONDS);
+
           if (sErr || !signed) throw new Error("sign failed");
           return {
             fileId: f.id,
@@ -547,9 +575,11 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
-    // 11) Mark queued — race-safe: only if still 'submitting'. If the
-    //     worker already sent a webhook that advanced us to 'processing'
-    //     or a terminal state, we do NOT regress.
+    // 11) Race-safe status/binding update.
+    //     - Never regress processing / completed / failed / cancelled → queued.
+    //     - If the webhook already bound worker_job_id first (legitimate race),
+    //       respect the existing binding and never overwrite it here.
+    //     - Only update status to 'queued' if the job is still 'submitting'.
     const { error: updErr } = await supabaseAdmin
       .from("render_jobs")
       .update({
@@ -559,17 +589,27 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         started_at: new Date().toISOString(),
       })
       .eq("id", jobId)
-      .eq("status", "submitting");
+      .eq("status", "submitting")
+      .is("worker_job_id", null);
     if (updErr) console.error("[submitRenderJob] update", updErr);
 
-    // Ensure worker_job_id is bound even if state advanced past 'submitting'.
+    // If status advanced past 'submitting' (e.g. webhook set 'processing'
+    // already) but worker_job_id is still null, bind it now — conditionally,
+    // so we NEVER overwrite an already-bound value.
     await supabaseAdmin
       .from("render_jobs")
-      .update({ worker_job_id: workerJobId })
+      .update({ worker_job_id: workerJobId, attempt_count: 1 })
       .eq("id", jobId)
       .is("worker_job_id", null);
 
-    await supabaseAdmin.from("projects").update({ status: "processing" }).eq("id", data.project_id);
+    // Only advance the project to 'processing' if it isn't already
+    // completed/failed by an early webhook. Prevents regression.
+    await supabaseAdmin
+      .from("projects")
+      .update({ status: "processing" })
+      .eq("id", data.project_id)
+      .not("status", "in", "(completed,failed)");
+
 
     return { job_id: jobId };
   });

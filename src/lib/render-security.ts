@@ -163,14 +163,98 @@ export function isPathUnderJob(
 // Output limits
 // -----------------------------------------------------------------------
 /**
- * Max outputs a job may declare = sources × variations, hard-capped.
- * Callers use this to reject any worker payload that exceeds the total.
+ * Raw product of sources × variations, WITHOUT a clamp.
+ * Callers MUST reject `> HARD_MAX_OUTPUTS` before creating a job, targets
+ * or signed URLs. 400 is permitted; 401+ must be rejected up-front so we
+ * never persist a job that will inevitably fail on the exact-set check.
  */
-export function computeMaxOutputs(
-  sourceCount: number,
-  variationCount: number,
-  hardCap = 400,
-): number {
-  const n = Math.max(0, Math.floor(sourceCount)) * Math.max(0, Math.floor(variationCount));
-  return Math.min(n, hardCap);
+export function computeMaxOutputs(sourceCount: number, variationCount: number): number {
+  const s = Math.max(0, Math.floor(sourceCount));
+  const v = Math.max(0, Math.floor(variationCount));
+  return s * v;
 }
+
+// -----------------------------------------------------------------------
+// Render input validation (server-side, pre-signing)
+// -----------------------------------------------------------------------
+export type RenderFileType = "source_video" | "logo" | "template_asset";
+
+const BUCKET_BY_TYPE: Record<RenderFileType, string> = {
+  source_video: "project-inputs",
+  logo: "project-assets",
+  template_asset: "project-assets",
+};
+
+/** Server-canonical bucket for a given file_type. Returns null if unknown. */
+export function bucketForFileType(fileType: string): string | null {
+  if (fileType === "source_video" || fileType === "logo" || fileType === "template_asset") {
+    return BUCKET_BY_TYPE[fileType];
+  }
+  return null;
+}
+
+/**
+ * MIME compatibility per file_type:
+ *  - source_video: must start with video/
+ *  - logo: must start with image/
+ *  - template_asset: image/ or video/ (asset overlays)
+ */
+export function mimeAllowedForFileType(fileType: string, mimeType: string | null | undefined): boolean {
+  if (!mimeType || typeof mimeType !== "string") return false;
+  const m = mimeType.toLowerCase();
+  if (fileType === "source_video") return m.startsWith("video/");
+  if (fileType === "logo") return m.startsWith("image/");
+  if (fileType === "template_asset") return m.startsWith("image/") || m.startsWith("video/");
+  return false;
+}
+
+/**
+ * Server invariant for input storage_path:
+ *  - must be a non-empty string
+ *  - must start EXACTLY with `${userId}/${projectId}/`
+ *  - must NOT contain `..`, `//`, or backslash
+ */
+export function isValidInputStoragePath(path: string, userId: string, projectId: string): boolean {
+  if (typeof path !== "string" || path.length === 0) return false;
+  if (path.includes("..") || path.includes("//") || path.includes("\\")) return false;
+  const prefix = `${userId}/${projectId}/`;
+  return path.startsWith(prefix) && path.length > prefix.length;
+}
+
+export type RenderInputCandidate = {
+  id: string;
+  user_id?: string | null;
+  project_id?: string | null;
+  status?: string | null;
+  file_type: string;
+  mime_type: string | null;
+  storage_path: string;
+};
+
+export type RenderInputRejection =
+  | "not_uploaded"
+  | "wrong_owner"
+  | "wrong_project"
+  | "invalid_type"
+  | "invalid_path"
+  | "invalid_mime";
+
+/**
+ * Validates a project_files row before we sign its input URL. Returns null
+ * on success or a stable rejection code. Callers translate that into a
+ * safe client error and refuse to proceed with the render.
+ */
+export function validateRenderInput(
+  file: RenderInputCandidate,
+  userId: string,
+  projectId: string,
+): RenderInputRejection | null {
+  if (file.status !== "uploaded") return "not_uploaded";
+  if (file.user_id && file.user_id !== userId) return "wrong_owner";
+  if (file.project_id && file.project_id !== projectId) return "wrong_project";
+  if (!bucketForFileType(file.file_type)) return "invalid_type";
+  if (!isValidInputStoragePath(file.storage_path, userId, projectId)) return "invalid_path";
+  if (!mimeAllowedForFileType(file.file_type, file.mime_type)) return "invalid_mime";
+  return null;
+}
+
