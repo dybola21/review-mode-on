@@ -140,4 +140,35 @@ describe("jobPayloadSchema", () => {
     };
     expect(jobPayloadSchema.safeParse(bad).success).toBe(false);
   });
+
+  it("defaults header_image_position_x/y to 0.5 when omitted", () => {
+    const parsed = jobPayloadSchema.parse(base);
+    expect(parsed.templateSettings.header_image_position_x).toBe(0.5);
+    expect(parsed.templateSettings.header_image_position_y).toBe(0.5);
+  });
+
+  it("accepts explicit header_image_position_x/y inside 0..1", () => {
+    const ok = {
+      ...base,
+      templateSettings: {
+        ...base.templateSettings,
+        header_image_position_x: 0,
+        header_image_position_y: 1,
+      },
+    };
+    expect(jobPayloadSchema.safeParse(ok).success).toBe(true);
+  });
+
+  it("rejects header_image_position_x/y outside 0..1", () => {
+    const badLo = {
+      ...base,
+      templateSettings: { ...base.templateSettings, header_image_position_x: -0.01 },
+    };
+    expect(jobPayloadSchema.safeParse(badLo).success).toBe(false);
+    const badHi = {
+      ...base,
+      templateSettings: { ...base.templateSettings, header_image_position_y: 1.01 },
+    };
+    expect(jobPayloadSchema.safeParse(badHi).success).toBe(false);
+  });
 });

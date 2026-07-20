@@ -505,4 +505,111 @@ describe("template + ffmpeg composition (production pipeline)", () => {
       }),
     ).rejects.toThrow(/header_image_invalid/);
   }, 30_000);
+
+  it("header-art cover: position_y=0 vs position_y=1 produce different crops of an asymmetric image", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tpl-int-pos-"));
+    const src = path.join(dir, "src.mp4");
+    await makeSyntheticSource(src);
+
+    // Asymmetric header: TOP half red, BOTTOM half blue. Natural size taller
+    // than the header band so cover has vertical overshoot.
+    const headerArt = path.join(dir, "header-asym.png");
+    await runFfmpeg([
+      "-y",
+      "-nostdin",
+      "-loglevel",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=red:s=1080x960:d=0.1",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=blue:s=1080x960:d=0.1",
+      "-filter_complex",
+      "[0:v][1:v]vstack=inputs=2",
+      "-frames:v",
+      "1",
+      headerArt,
+    ]);
+
+    const W = 1080;
+    const H = 1920;
+    const baseTemplate: TemplateSettings = {
+      page_name: "",
+      identifier: "",
+      headline: "",
+      logo_file_id: null,
+      background_color: "#0F0F12",
+      text_color: "#FFFFFF",
+      accent_color: "#FF5A1F",
+      watermark_position: "bottom-right",
+      watermark_opacity: 0.6,
+      header_height_ratio: 0.335,
+      header_image_file_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      header_image_fit: "cover",
+      header_image_position_x: 0.5,
+      header_image_position_y: 0.5,
+    };
+
+    async function renderWithPosY(posY: number, tag: string): Promise<Buffer> {
+      const subDir = fs.mkdtempSync(path.join(dir, `pos-${tag}-`));
+      const tpl: TemplateSettings = { ...baseTemplate, header_image_position_y: posY };
+      const assets = await buildTemplateOverlay({
+        width: W,
+        height: H,
+        template: tpl,
+        outDir: subDir,
+        jobId: `job-pos-${tag}`,
+        logoPath: null,
+        headerImagePath: headerArt,
+        headerImageNaturalSize: { w: 1080, h: 1920 },
+        ffmpegTimeoutMs: 30_000,
+      });
+      const jobId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+      const outId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+      const params = computeVariationParams(jobId, outId, 1, VARIATION);
+      const jitter = computeWatermarkOffset(jobId, outId, 1, false, 40);
+      const out = path.join(subDir, "out.mp4");
+      const srcProbe = await ffprobe(src);
+      await renderOutput(
+        {
+          sourceVideoPath: src,
+          headerOverlayPath: assets.headerOverlayPath,
+          watermarkPngPath: assets.watermarkPngPath,
+          watermarkSize: assets.watermarkSize,
+          watermarkPosition: tpl.watermark_position,
+          watermarkOpacity: tpl.watermark_opacity,
+          watermarkJitter: jitter,
+          outputPath: out,
+          variation: params,
+          targetWidth: W,
+          targetHeight: H,
+          headerHeight: assets.layout.headerHeight,
+          crf: 26,
+          timeoutMs: 60_000,
+          maxDurationSeconds: 30,
+        },
+        srcProbe,
+      );
+      return extractFrameRgb24(out, W, H);
+    }
+
+    const frameTop = await renderWithPosY(0, "top");
+    const frameBottom = await renderWithPosY(1, "bot");
+
+    const headerH = Math.round(H * 0.335);
+    // Sample the middle of the header band.
+    const yMid = Math.floor(headerH * 0.5);
+    const topBand = avgRegion(frameTop, W, Math.floor(W * 0.4), yMid, 120, 40);
+    const botBand = avgRegion(frameBottom, W, Math.floor(W * 0.4), yMid, 120, 40);
+
+    // position_y=0 aligns the TOP of the image with the top of the band → red.
+    expect(topBand[0]).toBeGreaterThan(140);
+    expect(topBand[2]).toBeLessThan(80);
+    // position_y=1 aligns the BOTTOM of the image with the bottom of the band → blue.
+    expect(botBand[2]).toBeGreaterThan(140);
+    expect(botBand[0]).toBeLessThan(80);
+  }, 180_000);
 });

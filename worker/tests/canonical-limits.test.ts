@@ -91,4 +91,16 @@ describe("worker canonical contract limits", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("header_image_position_x/y default to 0.5 and are rejected outside 0..1", () => {
+    const parsed = templateSettingsSchema.parse(validTemplate);
+    expect(parsed.header_image_position_x).toBe(0.5);
+    expect(parsed.header_image_position_y).toBe(0.5);
+    expect(
+      templateSettingsSchema.safeParse({ ...validTemplate, header_image_position_x: -0.1 }).success,
+    ).toBe(false);
+    expect(
+      templateSettingsSchema.safeParse({ ...validTemplate, header_image_position_y: 1.1 }).success,
+    ).toBe(false);
+  });
 });

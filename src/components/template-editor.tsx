@@ -121,8 +121,21 @@ export function TemplateEditor({
       if (id && prev.header_height_ratio < MIN_HEADER_RATIO) {
         next.header_height_ratio = DEFAULT_HEADER_RATIO;
       }
+      // Ao trocar a imagem, sempre voltar para o centro.
+      if (id !== prev.header_image_file_id) {
+        next.header_image_position_x = 0.5;
+        next.header_image_position_y = 0.5;
+      }
       return next;
     });
+  }
+
+  function centerHeaderImage() {
+    setTpl((prev) => ({
+      ...prev,
+      header_image_position_x: 0.5,
+      header_image_position_y: 0.5,
+    }));
   }
 
   // -------- Upload direto da arte do cabeçalho --------
@@ -410,6 +423,15 @@ export function TemplateEditor({
                   </span>
                 </label>
               </div>
+              {tpl.header_image_fit === "cover" && tpl.header_image_file_id && (
+                <button
+                  type="button"
+                  onClick={centerHeaderImage}
+                  className="mt-2 inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Centralizar
+                </button>
+              )}
             </Field>
           </div>
 
@@ -496,7 +518,19 @@ export function TemplateEditor({
           </div>
         </div>
 
-        <TemplatePreview9x16 template={tpl} headerUrl={headerUrl} logoUrl={logoUrl} />
+        <TemplatePreview9x16
+          template={tpl}
+          headerUrl={headerUrl}
+          logoUrl={logoUrl}
+          interactive
+          onPositionChange={(p) =>
+            setTpl((prev) => ({
+              ...prev,
+              header_image_position_x: p.x,
+              header_image_position_y: p.y,
+            }))
+          }
+        />
       </div>
     </div>
   );
