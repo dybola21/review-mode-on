@@ -226,7 +226,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 2) Source files
     const { data: files, error: filesErr } = await context.supabase
       .from("project_files")
-      .select("id, file_name, storage_path, mime_type, file_type, status")
+      .select("id, user_id, project_id, file_name, storage_path, mime_type, file_type, status")
       .eq("project_id", data.project_id)
       .eq("file_type", "source_video")
       .eq("status", "uploaded");
@@ -245,15 +245,20 @@ export const submitRenderJob = createServerFn({ method: "POST" })
 
     let assetFiles: Array<{
       id: string;
+      user_id: string;
+      project_id: string;
       file_name: string;
       storage_path: string;
       mime_type: string;
       file_type: string;
+      status: string;
     }> = [];
     if (referencedAssetIds.size > 0) {
       const { data: assets, error: aErr } = await context.supabase
         .from("project_files")
-        .select("id, file_name, storage_path, mime_type, file_type, status")
+        .select(
+          "id, user_id, project_id, file_name, storage_path, mime_type, file_type, status",
+        )
         .eq("project_id", data.project_id)
         .eq("status", "uploaded")
         .in("id", Array.from(referencedAssetIds));
@@ -269,6 +274,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         }
       }
     }
+
 
     // 3) Rights
     const { data: rights } = await context.supabase
