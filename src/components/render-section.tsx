@@ -8,6 +8,7 @@ import {
   getLatestRenderJob,
   getRenderJobDiagnostics,
   submitRenderJob,
+  type RenderJobDiagnostics,
 } from "@/lib/render.functions";
 import { listProjectFiles } from "@/lib/project-files.functions";
 
@@ -198,14 +199,8 @@ function fmtDuration(s: number): string {
   return `${m}m${r.toString().padStart(2, "0")}s`;
 }
 
-function DiagnosticsBlock({
-  d,
-}: {
-  d: NonNullable<ReturnType<typeof useServerFn<typeof getRenderJobDiagnostics>>> extends never
-    ? never
-    : Exclude<Awaited<ReturnType<typeof getRenderJobDiagnostics>>, null>;
-}) {
-  let title = "Diagnóstico";
+function DiagnosticsBlock({ d }: { d: NonNullable<RenderJobDiagnostics> }) {
+  const title = "Diagnóstico";
   let detail = "";
   if (d.status === "queued" && d.queuePosition != null) {
     detail = `Na fila — posição ${d.queuePosition}`;
