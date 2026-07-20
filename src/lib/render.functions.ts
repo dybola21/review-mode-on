@@ -16,6 +16,31 @@ function clientError(msg: string): Error {
   return new Error(msg);
 }
 
+type SubmitStage =
+  | "validation_started"
+  | "job_created"
+  | "targets_created"
+  | "signed_urls_created"
+  | "worker_request_started"
+  | "worker_accepted"
+  | "submission_failed";
+
+function logSubmit(
+  stage: SubmitStage,
+  fields: { projectId: string; jobId?: string | null; code?: string },
+): void {
+  // Structured, secret-free log line for the render submission pipeline.
+  console.log(
+    JSON.stringify({
+      event: "submitRenderJob",
+      stage,
+      projectId: fields.projectId,
+      jobId: fields.jobId ?? null,
+      code: fields.code ?? null,
+    }),
+  );
+}
+
 const ACTIVE_STATUSES = ["queued", "submitting", "processing"] as const;
 const SIGNED_INPUT_TTL_SECONDS = 60 * 60; // 1h
 const SIGNED_UPLOAD_TTL_SECONDS = 60 * 60 * 2; // 2h — Supabase default upper bound
