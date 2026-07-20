@@ -29,8 +29,9 @@ const webhookSchema = z.object({
  * completed → *, etc.) is silently rejected as an invalid transition.
  */
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  submitting: ["queued", "processing", "failed"],
-  queued: ["queued", "processing", "failed", "cancelled"],
+  submitting: ["queued", "processing", "completed", "failed"],
+  queued: ["queued", "processing", "completed", "failed", "cancelled"],
+
   processing: ["processing", "completed", "failed", "cancelled"],
   completed: [],
   failed: [],
