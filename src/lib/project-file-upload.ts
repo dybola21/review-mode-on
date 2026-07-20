@@ -1,3 +1,5 @@
+import { useServerFn } from "@tanstack/react-start";
+import { useCallback } from "react";
 import {
   confirmProjectFile,
   prepareProjectFileUpload,
@@ -13,51 +15,58 @@ export type UploadProgress = {
 };
 
 /**
- * Executes the secure upload flow for a project file:
- * prepareProjectFileUpload → PUT signed URL → confirmProjectFile.
+ * Reusable secure upload flow shared by ProjectFilesSection and the header-art
+ * uploader inside TemplateEditor.
  *
- * Never performs direct INSERTs and never uses service-role credentials on
- * the client. Both callers (ProjectFilesSection and TemplateEditor) share
- * this implementation.
+ * Flow: prepareProjectFileUpload → PUT signed URL → confirmProjectFile.
+ * No direct INSERTs, no service-role credentials in the client.
  */
-export async function uploadProjectFile(params: {
-  projectId: string;
-  file: File;
-  fileType: ProjectFileType;
-  signal: AbortSignal;
-  onProgress?: (p: UploadProgress) => void;
-}): Promise<{ file_id: string }> {
-  const { file, fileType, projectId, signal, onProgress } = params;
+export function useProjectFileUploader() {
+  const prepareFn = useServerFn(prepareProjectFileUpload);
+  const confirmFn = useServerFn(confirmProjectFile);
 
-  onProgress?.({ phase: "uploading", percent: 5 });
+  return useCallback(
+    async (params: {
+      projectId: string;
+      file: File;
+      fileType: ProjectFileType;
+      signal: AbortSignal;
+      onProgress?: (p: UploadProgress) => void;
+    }): Promise<{ file_id: string }> => {
+      const { file, fileType, projectId, signal, onProgress } = params;
 
-  const prepared = await prepareProjectFileUpload({
-    data: {
-      project_id: projectId,
-      file_name: file.name,
-      mime_type: file.type,
-      file_size: file.size,
-      file_type: fileType,
+      onProgress?.({ phase: "uploading", percent: 5 });
+
+      const prepared = await prepareFn({
+        data: {
+          project_id: projectId,
+          file_name: file.name,
+          mime_type: file.type,
+          file_size: file.size,
+          file_type: fileType,
+        },
+      });
+
+      onProgress?.({ phase: "uploading", percent: 15 });
+
+      const uploaded = await xhrUpload({
+        url: prepared.signed_url,
+        file,
+        signal,
+        onProgress: (p) =>
+          onProgress?.({ phase: "uploading", percent: 15 + Math.floor(p * 0.75) }),
+      });
+      if (!uploaded) throw new Error("Upload cancelado.");
+
+      onProgress?.({ phase: "confirming", percent: 92 });
+
+      await confirmFn({ data: { file_id: prepared.file_id } });
+
+      onProgress?.({ phase: "done", percent: 100 });
+      return { file_id: prepared.file_id };
     },
-  });
-
-  onProgress?.({ phase: "uploading", percent: 15 });
-
-  const uploaded = await xhrUpload({
-    url: prepared.signed_url,
-    file,
-    signal,
-    onProgress: (p) =>
-      onProgress?.({ phase: "uploading", percent: 15 + Math.floor(p * 0.75) }),
-  });
-  if (!uploaded) throw new Error("Upload cancelado.");
-
-  onProgress?.({ phase: "confirming", percent: 92 });
-
-  await confirmProjectFile({ data: { file_id: prepared.file_id } });
-
-  onProgress?.({ phase: "done", percent: 100 });
-  return { file_id: prepared.file_id };
+    [prepareFn, confirmFn],
+  );
 }
 
 export function xhrUpload({
