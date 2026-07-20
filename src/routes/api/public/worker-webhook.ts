@@ -29,8 +29,9 @@ const webhookSchema = z.object({
  * completed → *, etc.) is silently rejected as an invalid transition.
  */
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  submitting: ["queued", "processing", "failed"],
-  queued: ["queued", "processing", "failed", "cancelled"],
+  submitting: ["queued", "processing", "completed", "failed"],
+  queued: ["queued", "processing", "completed", "failed", "cancelled"],
+
   processing: ["processing", "completed", "failed", "cancelled"],
   completed: [],
   failed: [],
@@ -84,21 +85,14 @@ async function releaseNonceAnd503(
   return new Response("Service unavailable", { status: 503 });
 }
 
-type StorageCheck =
-  | { ok: true; exists: boolean; size: number }
-  | { ok: false; transient: true };
+type StorageCheck = { ok: true; exists: boolean; size: number } | { ok: false; transient: true };
 
-async function verifyStorageObject(
-  admin: AdminLike,
-  storagePath: string,
-): Promise<StorageCheck> {
+async function verifyStorageObject(admin: AdminLike, storagePath: string): Promise<StorageCheck> {
   const parts = storagePath.split("/");
   if (parts.length < 2) return { ok: true, exists: false, size: 0 };
   const parent = parts.slice(0, -1).join("/");
   const name = parts[parts.length - 1]!;
-  const { data, error } = await admin.storage
-    .from("render-outputs")
-    .list(parent, { search: name });
+  const { data, error } = await admin.storage.from("render-outputs").list(parent, { search: name });
   // Storage lookup failure is transient — NEVER "missing_upload".
   if (error) return { ok: false, transient: true };
   const found = (data ?? []).find((o) => o.name === name);
@@ -156,8 +150,9 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         const nonceKey = `webhook:${evt.eventId}`;
         {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: nErr } = await (supabaseAdmin.from("worker_request_nonces") as any)
-            .insert({ nonce: nonceKey, purpose: "webhook" });
+          const { error: nErr } = await (supabaseAdmin.from("worker_request_nonces") as any).insert(
+            { nonce: nonceKey, purpose: "webhook" },
+          );
           if (nErr) {
             const code = (nErr as { code?: string }).code;
             if (code === "23505") {
@@ -210,7 +205,12 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               .eq("id", job.id)
               .maybeSingle();
             if (rrErr || !reread) {
-              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "worker rebind lookup", rrErr);
+              return await releaseNonceAnd503(
+                supabaseAdmin,
+                nonceKey,
+                "worker rebind lookup",
+                rrErr,
+              );
             }
             if (reread.worker_job_id !== evt.workerJobId) {
               return new Response("Unauthorized", { status: 401 });
@@ -236,7 +236,7 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
           if (evt.status === "completed") {
             if (!evt.outputs || evt.outputs.length === 0) {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const { error } = await (supabaseAdmin.from("render_jobs") as any)
+              const { error: fjErr } = await (supabaseAdmin.from("render_jobs") as any)
                 .update({
                   status: "failed",
                   error_code: "no_outputs",
@@ -244,33 +244,42 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                   completed_at: new Date().toISOString(),
                 })
                 .eq("id", job.id);
-              if (error) {
-                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail update", error);
+              if (fjErr) {
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail update", fjErr);
               }
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              await (supabaseAdmin.from("projects") as any)
+              const { error: fpErr } = await (supabaseAdmin.from("projects") as any)
                 .update({ status: "failed" })
-                .eq("id", job.project_id);
+                .eq("id", job.project_id)
+                .not("status", "in", "(completed,failed)");
+              if (fpErr) {
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "fail project", fpErr);
+              }
               return new Response("ok", { status: 200 });
             }
 
             // Load expected targets so we can verify Storage BEFORE calling
             // the atomic RPC.
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data: targets, error: tErr } = await (supabaseAdmin.from("render_output_targets") as any)
-              .select("worker_output_id, storage_path")
-              .eq("render_job_id", job.id);
+            const { data: targets, error: tErr } =
+              await // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabaseAdmin.from("render_output_targets") as any)
+
+                .select("worker_output_id, storage_path")
+                .eq("render_job_id", job.id);
             if (tErr || !targets) {
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "targets", tErr);
             }
             const targetPathById = new Map<string, string>(
-              (targets as Array<{ worker_output_id: string; storage_path: string }>).map(
-                (t) => [t.worker_output_id, t.storage_path],
-              ),
+              (targets as Array<{ worker_output_id: string; storage_path: string }>).map((t) => [
+                t.worker_output_id,
+                t.storage_path,
+              ]),
             );
 
-            // Verify Storage for every reported output. Transient errors →
-            // 503 with nonce released (worker can retry same eventId).
+            // Verify Storage for every reported output. Transient errors or
+            // genuinely missing uploads both surface as 503 with the nonce
+            // released — the worker keeps 4xx as terminal and drops 409, so
+            // we MUST return 5xx to trigger a retry with a re-upload.
             const enriched: Array<{
               worker_output_id: string;
               file_size: number;
@@ -285,22 +294,17 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
               }
               const check = await verifyStorageObject(supabaseAdmin, targetPath);
               if (!check.ok) {
-                return await releaseNonceAnd503(
-                  supabaseAdmin,
-                  nonceKey,
-                  "storage check transient",
-                );
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "storage check transient");
               }
               if (!check.exists) {
-                // Object genuinely absent — worker must re-upload. Free the
-                // nonce so a retry with a fresh eventId isn't blocked.
-                await releaseNonceAnd503(supabaseAdmin, nonceKey, "missing_upload");
-                return new Response("Missing upload", { status: 409 });
+                // Object genuinely absent — release nonce and answer 503
+                // (never 409; the worker discards 409 as terminal).
+                return await releaseNonceAnd503(supabaseAdmin, nonceKey, "missing_upload");
               }
 
               if (check.size <= 0) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (supabaseAdmin.from("render_jobs") as any)
+                const { error: emjErr } = await (supabaseAdmin.from("render_jobs") as any)
                   .update({
                     status: "failed",
                     error_code: "empty_upload",
@@ -308,10 +312,17 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                     completed_at: new Date().toISOString(),
                   })
                   .eq("id", job.id);
+                if (emjErr) {
+                  return await releaseNonceAnd503(supabaseAdmin, nonceKey, "empty job", emjErr);
+                }
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                await (supabaseAdmin.from("projects") as any)
+                const { error: empErr } = await (supabaseAdmin.from("projects") as any)
                   .update({ status: "failed" })
-                  .eq("id", job.project_id);
+                  .eq("id", job.project_id)
+                  .not("status", "in", "(completed,failed)");
+                if (empErr) {
+                  return await releaseNonceAnd503(supabaseAdmin, nonceKey, "empty project", empErr);
+                }
                 return new Response("ok", { status: 200 });
               }
               enriched.push({
@@ -324,14 +335,11 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
             // Single atomic RPC: locks job, validates exact set, upserts
             // outputs and finalizes job + project — all in one transaction.
-            const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc(
-              "finalize_render_job",
-              {
-                _job_id: job.id,
-                _worker_job_id: evt.workerJobId,
-                _outputs: enriched,
-              },
-            );
+            const { data: rpc, error: rpcErr } = await supabaseAdmin.rpc("finalize_render_job", {
+              _job_id: job.id,
+              _worker_job_id: evt.workerJobId,
+              _outputs: enriched,
+            });
             if (rpcErr) {
               return await releaseNonceAnd503(supabaseAdmin, nonceKey, "finalize", rpcErr);
             }
@@ -394,16 +402,22 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
 
           if (evt.status === "failed" || evt.status === "cancelled") {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabaseAdmin.from("projects") as any)
+            const { error: pfErr } = await (supabaseAdmin.from("projects") as any)
               .update({ status: "failed" })
               .eq("id", job.project_id)
               .not("status", "in", "(completed,failed)");
+            if (pfErr) {
+              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "project fail", pfErr);
+            }
           } else if (evt.status === "processing") {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (supabaseAdmin.from("projects") as any)
+            const { error: ppErr } = await (supabaseAdmin.from("projects") as any)
               .update({ status: "processing" })
               .eq("id", job.project_id)
               .not("status", "in", "(completed,failed)");
+            if (ppErr) {
+              return await releaseNonceAnd503(supabaseAdmin, nonceKey, "project processing", ppErr);
+            }
           }
 
           return new Response("ok", { status: 200 });
