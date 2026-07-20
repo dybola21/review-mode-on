@@ -183,7 +183,6 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
 
 // ----- confirmar upload: valida objeto e transiciona pending → uploaded -----
 const confirmSchema = z.object({
-  project_id: z.string().uuid(),
   file_id: z.string().uuid(),
 });
 
@@ -194,14 +193,26 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     // Server-owned lookup: NEVER trust client-supplied metadata.
     const { data: row, error: findErr } = await context.supabase
       .from("project_files")
-      .select("id, project_id, storage_path, file_type, status, user_id")
+      .select(
+        "id, project_id, storage_path, file_type, mime_type, file_size, status, user_id, upload_expires_at",
+      )
       .eq("id", data.file_id)
-      .eq("project_id", data.project_id)
       .maybeSingle();
     if (findErr || !row) throw clientError("Registro de upload não encontrado.");
     if (row.user_id !== context.userId) throw clientError("Registro de upload não encontrado.");
     if (row.status === "uploaded") return { id: row.id };
     if (row.status !== "pending") throw clientError("Upload em estado inválido.");
+
+    // Expiração explícita: recusa e marca como expirado.
+    if (row.upload_expires_at && new Date(row.upload_expires_at).getTime() < Date.now()) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      await supabaseAdmin
+        .from("project_files")
+        .update({ status: "expired" })
+        .eq("id", row.id)
+        .eq("status", "pending");
+      throw clientError("Upload expirado. Envie o arquivo novamente.");
+    }
 
     const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
@@ -220,9 +231,27 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     const found = (listed ?? []).find((o) => o.name === objectName);
     if (!found) throw clientError("Upload não encontrado no armazenamento.");
 
+    // Valida metadata real do objeto no Storage.
+    const meta = (found.metadata ?? {}) as {
+      size?: number;
+      mimetype?: string;
+    };
+    const actualSize = typeof meta.size === "number" ? meta.size : 0;
+    const actualMime = typeof meta.mimetype === "string" ? meta.mimetype : "";
+
+    if (actualSize <= 0) {
+      throw clientError("Upload vazio no armazenamento.");
+    }
+    if (actualSize !== row.file_size) {
+      throw clientError("Tamanho do arquivo divergente do declarado.");
+    }
+    if (actualMime && actualMime !== row.mime_type) {
+      throw clientError("Tipo do arquivo divergente do declarado.");
+    }
+
     const { error: updErr } = await supabaseAdmin
       .from("project_files")
-      .update({ status: "uploaded" })
+      .update({ status: "uploaded", upload_expires_at: null })
       .eq("id", row.id)
       .eq("status", "pending");
     if (updErr) {
@@ -231,6 +260,7 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     }
     return { id: row.id };
   });
+
 
 // ----- excluir arquivo -----
 export const deleteProjectFile = createServerFn({ method: "POST" })
