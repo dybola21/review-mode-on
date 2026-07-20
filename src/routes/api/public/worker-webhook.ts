@@ -146,10 +146,9 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         }
         const evt = parsed.data;
 
-        // Body timestamp must match the signed header timestamp exactly.
-        if (String(evt.timestamp) !== timestamp) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        // Body timestamp is informational (created at enqueue) and may differ
+        // from the header timestamp (created at dispatch/retry). Freshness is
+        // enforced on the header only; the body value is covered by the HMAC.
 
         let supabaseAdmin: AdminLike;
         try {
