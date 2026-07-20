@@ -454,13 +454,14 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       const allInputs = [...files, ...assetFiles];
       signedInputs = await Promise.all(
         allInputs.map(async (f) => {
-          if (!ALLOWED_INPUT_TYPES.has(f.file_type)) {
+          const bucket = bucketForFileType(f.file_type);
+          if (!bucket) {
             throw new Error(`invalid file_type: ${f.file_type}`);
           }
-          const bucket = BUCKET_BY_TYPE[f.file_type];
           const { data: signed, error: sErr } = await supabaseAdmin.storage
             .from(bucket)
             .createSignedUrl(f.storage_path, SIGNED_INPUT_TTL_SECONDS);
+
           if (sErr || !signed) throw new Error("sign failed");
           return {
             fileId: f.id,
