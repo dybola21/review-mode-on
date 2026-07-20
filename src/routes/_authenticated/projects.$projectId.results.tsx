@@ -97,6 +97,17 @@ function ResultsPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Resultados</h1>
       <p className="mt-1 text-sm text-muted-foreground">Arquivos gerados pelo processamento.</p>
 
+      {query.data && query.data.length > 0 && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={downloadAll}
+            className="inline-flex items-center gap-2 rounded-md gradient-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            <Download className="h-4 w-4" /> Baixar todos ({query.data.length})
+          </button>
+        </div>
+      )}
+
       <div className="surface-card mt-6 p-6">
         {query.isLoading ? (
           <div className="flex items-center justify-center py-8">
