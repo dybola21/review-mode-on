@@ -58,9 +58,9 @@ export function RenderSection({ projectId }: { projectId: string }) {
     queryKey: ["render-diagnostics", projectId],
     queryFn: () => diagFn({ data: { project_id: projectId } }),
     enabled: !!job.data && ACTIVE.has(job.data.status),
-    refetchInterval: (q) => {
+    refetchInterval: () => {
       const s = job.data?.status;
-      return s && ACTIVE.has(s) ? 4000 : q.state.data ? false : false;
+      return s && ACTIVE.has(s) ? 4000 : false;
     },
   });
 
