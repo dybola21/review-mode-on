@@ -84,20 +84,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Editor em Massa" },
+      { title: "Editor em Massa — Variações editoriais dos seus vídeos" },
       {
         name: "description",
         content:
-          "Crie versões editoriais consistentes dos seus próprios vídeos utilizando templates, identidade visual e processamento em lote.",
+          "Aplique templates, identidade visual e variações editoriais em lote nos seus próprios vídeos.",
       },
-      { property: "og:title", content: "Editor em Massa" },
+      { property: "og:title", content: "Editor em Massa — Variações editoriais dos seus vídeos" },
       {
         property: "og:description",
         content:
-          "Templates, identidade visual e variações editoriais em lote — para conteúdo do qual você tem direitos.",
+          "Aplique templates, identidade visual e variações editoriais em lote nos seus próprios vídeos.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Editor em Massa — Variações editoriais dos seus vídeos" },
+      { name: "twitter:description", content: "Aplique templates, identidade visual e variações editoriais em lote nos seus próprios vídeos." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4f801336-9830-4ef8-9b3e-3c6dbdff151f/id-preview-8132633e--0bdb736b-8245-4c6a-baf0-160440128ae9.lovable.app-1784514482315.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4f801336-9830-4ef8-9b3e-3c6dbdff151f/id-preview-8132633e--0bdb736b-8245-4c6a-baf0-160440128ae9.lovable.app-1784514482315.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
