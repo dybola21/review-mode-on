@@ -91,7 +91,8 @@ export function RenderSection({
     health.data?.available &&
     !isActive &&
     !submit.isPending &&
-    sourceCount > 0;
+    sourceCount > 0 &&
+    hasHeaderArt;
 
   const workerStatus = !health.data
     ? { icon: Loader2, label: "Verificando servidor…", cls: "text-muted-foreground animate-spin" }
