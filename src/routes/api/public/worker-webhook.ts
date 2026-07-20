@@ -295,10 +295,9 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
                 // Object genuinely absent — worker must re-upload. Free the
                 // nonce so a retry with a fresh eventId isn't blocked.
                 await releaseNonceAnd503(supabaseAdmin, nonceKey, "missing_upload");
-                return new Response("Missing upload", { status: 409 }).clone
-                  ? new Response("Missing upload", { status: 409 })
-                  : new Response("Missing upload", { status: 409 });
+                return new Response("Missing upload", { status: 409 });
               }
+
               if (check.size <= 0) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 await (supabaseAdmin.from("render_jobs") as any)
