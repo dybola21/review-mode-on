@@ -136,7 +136,9 @@ export type Config = Readonly<z.infer<typeof envSchema>> & {
   readonly APP_WEBHOOK_URL: string;
   readonly APP_RENEW_INPUT_URL: string;
   readonly APP_RENEW_UPLOAD_URL: string;
+  readonly APP_VERIFY_OUTPUT_URL: string;
 };
+
 
 let cached: Config | null = null;
 
