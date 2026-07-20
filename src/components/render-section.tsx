@@ -25,7 +25,13 @@ const STATUS_LABEL: Record<string, string> = {
   expired: "Expirado",
 };
 
-export function RenderSection({ projectId }: { projectId: string }) {
+export function RenderSection({
+  projectId,
+  hasHeaderArt,
+}: {
+  projectId: string;
+  hasHeaderArt: boolean;
+}) {
   const qc = useQueryClient();
   const healthFn = useServerFn(checkWorkerHealth);
   const jobFn = useServerFn(getLatestRenderJob);
