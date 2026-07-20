@@ -102,10 +102,14 @@ export const Route = createFileRoute("/api/public/worker-verify-output")({
         // Anti-replay nonce (fail-closed on transient DB errors).
         const nonceKey = `verify-output:${nonce}`;
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: nErr } = (await (
-            supabaseAdmin.from("worker_request_nonces") as any
-          ).insert({ nonce: nonceKey, purpose: "verify_output" })) as { error: unknown };
+          const nonceTable = supabaseAdmin.from("worker_request_nonces") as unknown as {
+            insert: (row: Record<string, unknown>) => Promise<{ error: unknown }>;
+          };
+          const { error: nErr } = await nonceTable.insert({
+            nonce: nonceKey,
+            purpose: "verify_output",
+          });
+
           if (nErr) {
             const code = (nErr as { code?: string }).code;
             if (code === "23505") {
