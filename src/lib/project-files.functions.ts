@@ -206,7 +206,7 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     if (row.status !== "pending") throw clientError("Upload em estado inválido.");
 
     // Expiração explícita: recusa e marca como expirado.
-    if (row.upload_expires_at && new Date(row.upload_expires_at).getTime() < Date.now()) {
+    if (isUploadExpired(row.upload_expires_at)) {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       await supabaseAdmin
         .from("project_files")
@@ -231,23 +231,25 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
       throw clientError("Não foi possível confirmar o upload.");
     }
     const found = (listed ?? []).find((o) => o.name === objectName);
-    if (!found) throw clientError("Upload não encontrado no armazenamento.");
+    const meta = (found?.metadata ?? null) as { size?: number; mimetype?: string } | null;
 
-    // Valida metadata real do objeto no Storage.
-    const meta = (found.metadata ?? {}) as {
-      size?: number;
-      mimetype?: string;
-    };
-    const actualSize = typeof meta.size === "number" ? meta.size : 0;
-    const actualMime = typeof meta.mimetype === "string" ? meta.mimetype : "";
-
-    if (actualSize <= 0) {
+    const validation = validateStorageObject({
+      found: Boolean(found),
+      meta,
+      expectedSize: row.file_size,
+      expectedMime: row.mime_type,
+    });
+    if (validation === "not_found") {
+      throw clientError("Upload não encontrado no armazenamento.");
+    }
+    if (validation === "empty") {
       throw clientError("Upload vazio no armazenamento.");
     }
-    if (actualSize !== row.file_size) {
+    if (validation === "size_mismatch") {
       throw clientError("Tamanho do arquivo divergente do declarado.");
     }
-    if (actualMime && actualMime !== row.mime_type) {
+    if (validation === "mime_mismatch") {
+
       throw clientError("Tipo do arquivo divergente do declarado.");
     }
 
