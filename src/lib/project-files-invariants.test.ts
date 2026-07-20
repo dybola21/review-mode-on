@@ -13,10 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
 
-const SRC = readFileSync(
-  path.resolve(process.cwd(), "src/lib/project-files.functions.ts"),
-  "utf8",
-);
+const SRC = readFileSync(path.resolve(process.cwd(), "src/lib/project-files.functions.ts"), "utf8");
 
 describe("project-files.functions invariants", () => {
   it("cleanupExpiredProjectFiles runs before the uploaded+pending count", () => {

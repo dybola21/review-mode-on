@@ -72,10 +72,7 @@ async function assertProjectOwner(supabase: SB, projectId: string): Promise<void
  * deste projeto. Evita objetos órfãos indefinidamente e libera o slot
  * antes de contar o limite do projeto.
  */
-async function cleanupExpiredProjectFiles(
-  supabaseAdmin: SB,
-  projectId: string,
-): Promise<void> {
+async function cleanupExpiredProjectFiles(supabaseAdmin: SB, projectId: string): Promise<void> {
   try {
     await supabaseAdmin.rpc("expire_pending_project_files");
   } catch (e) {
