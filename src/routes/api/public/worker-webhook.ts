@@ -133,9 +133,23 @@ export const Route = createFileRoute("/api/public/worker-webhook")({
         }
         const parsed = webhookSchema.safeParse(payloadJson);
         if (!parsed.success) {
+          console.warn(
+            JSON.stringify({
+              event: "worker_webhook_invalid_payload",
+              issues: parsed.error.issues.map((i) => ({
+                path: i.path.join("."),
+                code: i.code,
+              })),
+            }),
+          );
           return new Response("Invalid payload", { status: 400 });
         }
         const evt = parsed.data;
+
+        // Body timestamp must match the signed header timestamp exactly.
+        if (String(evt.timestamp) !== timestamp) {
+          return new Response("Unauthorized", { status: 401 });
+        }
 
         let supabaseAdmin: AdminLike;
         try {
