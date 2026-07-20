@@ -263,7 +263,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     // 1) Project
     const { data: project, error: projectErr } = await context.supabase
       .from("projects")
-      .select("id, status, template_settings, variation_settings, variation_count")
+      .select("id, status, template_settings")
       .eq("id", data.project_id)
       .maybeSingle();
     if (projectErr || !project) throw clientError("Projeto não encontrado.");
@@ -281,8 +281,6 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     }
 
     // 2b) Assets referenced by the template (logo e/ou arte do cabeçalho).
-    //     Nunca enviamos assets não referenciados — o servidor deriva
-    //     file_type de project_files (jamais confia no cliente).
     const templateSettings = (project.template_settings ?? {}) as {
       logo_file_id?: string | null;
       header_image_file_id?: string | null;
@@ -359,30 +357,16 @@ export const submitRenderJob = createServerFn({ method: "POST" })
       throw clientError("Já existe um processamento em andamento.");
     }
 
-    // 5) Compute expected outputs (raw product — HARD_MAX enforced BEFORE
-    //    any write: no job, no targets, no signed URLs when 401+.).
-    const variationFromSettings = Number(
-      (project.variation_settings as { variation_count?: unknown } | null)?.variation_count,
-    );
-    const variationCount = Math.max(
-      1,
-      Number.isFinite(variationFromSettings) && variationFromSettings > 0
-        ? Math.floor(variationFromSettings)
-        : Number(project.variation_count) || 1,
-    );
-    const totalOutputs = computeMaxOutputs(files.length, variationCount);
+    // 5) v2: 1:1 — número de saídas = número de vídeos de origem. Sem clamp.
+    const totalOutputs = files.length;
     if (totalOutputs === 0) {
       throw clientError("Nada a processar.");
     }
     if (totalOutputs > HARD_MAX_OUTPUTS) {
-      throw clientError(
-        `Combinação de arquivos e variações excede o limite de ${HARD_MAX_OUTPUTS} saídas.`,
-      );
+      throw clientError(`O limite é de ${HARD_MAX_OUTPUTS} vídeos por processamento.`);
     }
 
-    // 5b) Validate every input file BEFORE we write anything. This closes
-    //     the pre-write door: no job, no targets, no signed URLs unless
-    //     every input passes the render invariants.
+    // 5b) Validate every input file BEFORE we write anything.
     const allInputsForValidation = [...files, ...assetFiles];
     for (const f of allInputsForValidation) {
       const reason = validateRenderInput(
