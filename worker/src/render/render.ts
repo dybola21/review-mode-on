@@ -115,6 +115,7 @@ export async function runJob(
 
     // Header art (novo layout): imagem obrigatória do projeto no topo do frame.
     let headerImagePath: string | null = null;
+    let headerImageNaturalSize: { w: number; h: number } | null = null;
     if (template.header_image_file_id) {
       const headerEntry = localById.get(template.header_image_file_id);
       if (!headerEntry) {
@@ -124,6 +125,14 @@ export async function runJob(
         throw new RenderError("header_image_invalid", "Arte do cabeçalho não é uma imagem.");
       }
       headerImagePath = headerEntry.path;
+      try {
+        const probe = await ffprobe(headerImagePath);
+        if (probe.width && probe.height && probe.width > 0 && probe.height > 0) {
+          headerImageNaturalSize = { w: probe.width, h: probe.height };
+        }
+      } catch {
+        headerImageNaturalSize = null;
+      }
     }
 
     // 2) Build template overlay once per job (header + optional watermark PNG).
@@ -135,8 +144,10 @@ export async function runJob(
       jobId: row.worker_job_id,
       logoPath,
       headerImagePath,
+      headerImageNaturalSize,
       ffmpegTimeoutMs: 60_000,
     });
+
 
     // Watermark jitter budget: up to 4% of frame width.
     const jitterBudget = Math.round(OUT_W * 0.04);
