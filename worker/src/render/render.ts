@@ -385,5 +385,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Verify a remotely-recorded output, retrying transient failures with
+ * exponential backoff. If verification stays transient across all
+ * attempts, returns `exists: false` so the caller reprocesses the
+ * output — the reprocess path is idempotent (upload uses a stable
+ * signed target and the RPC upserts), so retrying is safer than
+ * skipping a possibly-missing output. Never issues concurrent renders.
+ */
+async function verifyRemoteOutputWithRetry(
+  cfg: Config,
+  jobId: string,
+  workerJobId: string,
+  workerOutputId: string,
+  cancel: AbortSignal,
+): Promise<{ kind: "ok"; exists: boolean; size: number } | { kind: "auth" }> {
+  const delays = [0, 500, 1500, 4000];
+  for (let i = 0; i < delays.length; i += 1) {
+    cancel.throwIfAborted();
+    const d = delays[i] ?? 0;
+    if (d > 0) await sleep(d);
+    const r = await verifyRemoteOutput(cfg, jobId, workerJobId, workerOutputId);
+    if (r.kind === "ok") return r;
+    if (r.kind === "auth") return r;
+    // transient → retry
+  }
+  return { kind: "ok", exists: false, size: 0 };
+}
+
 // Path is used indirectly through ensureInsideDir; explicit import kept for clarity.
 void path;
+
