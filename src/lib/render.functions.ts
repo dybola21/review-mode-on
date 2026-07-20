@@ -286,10 +286,7 @@ export const submitRenderJob = createServerFn({ method: "POST" })
         if (id === templateSettings.logo_file_id && !found.mime_type.startsWith("image/")) {
           throw clientError("O logo do template precisa ser uma imagem.");
         }
-        if (
-          id === templateSettings.header_image_file_id &&
-          !found.mime_type.startsWith("image/")
-        ) {
+        if (id === templateSettings.header_image_file_id && !found.mime_type.startsWith("image/")) {
           throw clientError("A arte do cabeçalho precisa ser uma imagem.");
         }
       }

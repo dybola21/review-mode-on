@@ -435,14 +435,7 @@ describe("template + ffmpeg composition (production pipeline)", () => {
     expect(headerH).toBeGreaterThan(H * 0.3);
 
     // Header band is dominated by blue from the header art (#0033CC).
-    const hdrBand = avgRegion(
-      frame,
-      W,
-      Math.floor(W * 0.4),
-      Math.floor(headerH * 0.5),
-      120,
-      40,
-    );
+    const hdrBand = avgRegion(frame, W, Math.floor(W * 0.4), Math.floor(headerH * 0.5), 120, 40);
     expect(hdrBand[2]).toBeGreaterThan(140);
     expect(hdrBand[0]).toBeLessThan(80);
 
