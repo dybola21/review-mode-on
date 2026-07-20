@@ -222,40 +222,149 @@ export function TemplateEditor({
       <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">
           <Field label="Arte do cabeçalho (obrigatória)">
-            {imageFiles.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Envie uma imagem no bloco de arquivos para poder selecioná-la como arte do
-                cabeçalho. Recomendado: 1080×640 px, com textos dentro de uma margem segura.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                <select
-                  className="input w-full"
-                  value={tpl.header_image_file_id ?? ""}
-                  onChange={(e) => handleHeaderSelect(e.target.value)}
-                >
-                  <option value="">— Selecione a arte —</option>
-                  {imageFiles.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.file_name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-foreground">
-                  Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para evitar
-                  corte no modo &quot;Preencher&quot;.
-                </p>
-                {tpl.header_image_file_id && headerUrl && (
-                  <div className="rounded-md border border-border bg-surface p-2">
-                    <img
-                      src={headerUrl}
-                      alt="Arte do cabeçalho"
-                      className="max-h-24 w-full object-contain"
+            <div className="space-y-3">
+              {/* Slot de upload direto */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) startHeaderUpload(f);
+                }}
+                className={`rounded-lg border-2 border-dashed p-4 text-center text-sm transition-colors ${
+                  dragOver
+                    ? "border-primary bg-primary/5"
+                    : "border-border bg-surface/50 text-muted-foreground"
+                }`}
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  <p className="text-xs">
+                    Arraste a arte aqui ou clique para selecionar (PNG, JPG ou WebP).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => inputRef.current?.click()}
+                    disabled={
+                      headerUpload?.status === "uploading" ||
+                      headerUpload?.status === "confirming"
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md gradient-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" /> Enviar arte do cabeçalho
+                  </button>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept={HEADER_ART_MIMES.join(",")}
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) startHeaderUpload(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Progresso do upload atual */}
+              {headerUpload && (
+                <div className="rounded-md border border-border bg-surface p-3">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="flex-1 truncate">{headerUpload.file.name}</span>
+                    {(headerUpload.status === "uploading" ||
+                      headerUpload.status === "confirming") && (
+                      <button
+                        type="button"
+                        onClick={() => headerUpload.abort?.abort()}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Cancelar"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                    {headerUpload.status === "error" && (
+                      <button
+                        type="button"
+                        onClick={() => startHeaderUpload(headerUpload.file)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Tentar novamente"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full transition-all ${
+                        headerUpload.status === "error"
+                          ? "bg-destructive"
+                          : headerUpload.status === "done"
+                            ? "bg-emerald-500"
+                            : "bg-primary"
+                      }`}
+                      style={{ width: `${headerUpload.progress}%` }}
                     />
                   </div>
-                )}
-              </div>
-            )}
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {headerUpload.status === "uploading" && `Enviando ${headerUpload.progress}%`}
+                    {headerUpload.status === "confirming" && "Confirmando…"}
+                    {headerUpload.status === "done" && "Concluído"}
+                    {headerUpload.status === "canceled" && "Cancelado"}
+                    {headerUpload.status === "error" &&
+                      `Erro: ${headerUpload.error ?? "desconhecido"}`}
+                  </p>
+                </div>
+              )}
+
+              {/* Seletor de imagens já enviadas */}
+              {filesQuery.isLoading ? (
+                <div className="flex justify-center py-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : imageFiles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Nenhuma imagem enviada ainda. Use o slot acima ou o bloco de arquivos do projeto.
+                  Recomendado: 1080×640 px, com textos dentro de uma margem segura.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <label className="block text-[11px] font-medium text-muted-foreground">
+                    Ou selecione uma imagem já enviada
+                  </label>
+                  <select
+                    className="input w-full"
+                    value={tpl.header_image_file_id ?? ""}
+                    onChange={(e) => handleHeaderSelect(e.target.value)}
+                  >
+                    <option value="">— Selecione a arte —</option>
+                    {imageFiles.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.file_name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Recomendado 1080×640 px. Mantenha textos dentro de uma margem segura para
+                    evitar corte no modo &quot;Preencher&quot;.
+                  </p>
+                  {tpl.header_image_file_id && headerUrl && (
+                    <div className="rounded-md border border-border bg-surface p-2">
+                      <img
+                        src={headerUrl}
+                        alt="Arte do cabeçalho"
+                        className="max-h-24 w-full object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">
