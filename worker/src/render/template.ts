@@ -168,22 +168,59 @@ interface HeaderArtSvgArgs {
   headerHeight: number;
   fit: "cover" | "contain";
   imageDataUri: string;
+  naturalSize: { w: number; h: number } | null;
+  positionX: number;
+  positionY: number;
+}
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n)) return 0.5;
+  return Math.max(0, Math.min(1, n));
 }
 
 function buildHeaderArtSvg(o: HeaderArtSvgArgs): string {
-  // "cover" preenche e corta centralmente (slice); "contain" mostra tudo
-  // com letterboxing preto (meet + fundo preto na faixa).
-  const preserve = o.fit === "cover" ? "xMidYMid slice" : "xMidYMid meet";
-  const bgRect =
-    o.fit === "contain"
-      ? `<rect x="0" y="0" width="${o.width}" height="${o.headerHeight}" fill="#000000"/>`
-      : "";
+  // "contain" ignora X/Y e mantém a arte inteira com letterboxing preto.
+  if (o.fit === "contain") {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${o.width}" height="${o.height}" viewBox="0 0 ${o.width} ${o.height}">
+<rect x="0" y="0" width="${o.width}" height="${o.headerHeight}" fill="#000000"/>
+<image href="${o.imageDataUri}" x="0" y="0" width="${o.width}" height="${o.headerHeight}" preserveAspectRatio="xMidYMid meet"/>
+</svg>`;
+  }
+
+  // "cover": escala mantendo aspect ratio para preencher, corta pela faixa
+  // do cabeçalho e posiciona conforme (positionX, positionY).
+  // Sem naturalSize conhecido, fallback centralizado via preserveAspectRatio slice.
+  if (!o.naturalSize || o.naturalSize.w <= 0 || o.naturalSize.h <= 0) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${o.width}" height="${o.height}" viewBox="0 0 ${o.width} ${o.height}">
+<image href="${o.imageDataUri}" x="0" y="0" width="${o.width}" height="${o.headerHeight}" preserveAspectRatio="xMidYMid slice"/>
+</svg>`;
+  }
+
+  const nW = o.naturalSize.w;
+  const nH = o.naturalSize.h;
+  const scale = Math.max(o.width / nW, o.headerHeight / nH);
+  const scaledW = nW * scale;
+  const scaledH = nH * scale;
+  const overshootX = Math.max(0, scaledW - o.width);
+  const overshootY = Math.max(0, scaledH - o.headerHeight);
+  // Arredondamento seguro para inteiros — evita frações que geram
+  // sub-pixel rendering imprevisível no rsvg-convert.
+  const offsetX = Math.round(-overshootX * clamp01(o.positionX));
+  const offsetY = Math.round(-overshootY * clamp01(o.positionY));
+  const w = Math.round(scaledW);
+  const h = Math.round(scaledH);
+  const clipId = `hdc_${Math.random().toString(36).slice(2, 10)}`;
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${o.width}" height="${o.height}" viewBox="0 0 ${o.width} ${o.height}">
-${bgRect}
-<image href="${o.imageDataUri}" x="0" y="0" width="${o.width}" height="${o.headerHeight}" preserveAspectRatio="${preserve}"/>
+<defs><clipPath id="${clipId}"><rect x="0" y="0" width="${o.width}" height="${o.headerHeight}"/></clipPath></defs>
+<g clip-path="url(#${clipId})">
+<image href="${o.imageDataUri}" x="${offsetX}" y="${offsetY}" width="${w}" height="${h}" preserveAspectRatio="none"/>
+</g>
 </svg>`;
 }
+
 
 interface HeaderSvgArgs {
   width: number;
