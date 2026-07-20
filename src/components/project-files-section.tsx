@@ -13,12 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  confirmProjectFile,
-  deleteProjectFile,
-  listProjectFiles,
-  prepareProjectFileUpload,
-} from "@/lib/project-files.functions";
+import { deleteProjectFile, listProjectFiles } from "@/lib/project-files.functions";
+import { useProjectFileUploader } from "@/lib/project-file-upload";
 import type { getAppSettings } from "@/lib/app-settings.functions";
 
 import { extensionMatchesMime, sanitizeFileName } from "@/lib/project-schemas";
