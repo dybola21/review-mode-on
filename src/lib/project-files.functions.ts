@@ -5,7 +5,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "./app-settings.functions";
 import { extensionMatchesMime, sanitizeFileName } from "./project-schemas";
-import { isUploadExpired, validateStorageObject } from "./project-files-validation";
+import {
+  isUploadExpired,
+  isValidStoragePath,
+  validateStorageObject,
+} from "./project-files-validation";
 
 type SB = SupabaseClient<Database>;
 
@@ -62,6 +66,56 @@ async function assertProjectOwner(supabase: SB, projectId: string): Promise<void
   if (error || !data) throw clientError("Projeto não encontrado.");
 }
 
+/**
+ * Expira pendências vencidas (globalmente, via RPC), depois remove os
+ * objetos órfãos do Storage para o projeto e apaga as linhas expiradas
+ * deste projeto. Evita objetos órfãos indefinidamente e libera o slot
+ * antes de contar o limite do projeto.
+ */
+async function cleanupExpiredProjectFiles(supabaseAdmin: SB, projectId: string): Promise<void> {
+  try {
+    await supabaseAdmin.rpc("expire_pending_project_files");
+  } catch (e) {
+    console.warn("[cleanupExpiredProjectFiles] rpc skipped", e);
+  }
+
+  const { data: expired, error } = await supabaseAdmin
+    .from("project_files")
+    .select("id, storage_path, file_type")
+    .eq("project_id", projectId)
+    .eq("status", "expired");
+
+  if (error) {
+    console.warn("[cleanupExpiredProjectFiles] select", error);
+    return;
+  }
+  if (!expired || expired.length === 0) return;
+
+  const byBucket = new Map<string, string[]>();
+  for (const row of expired) {
+    const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
+    if (!bucket) continue;
+    const list = byBucket.get(bucket) ?? [];
+    list.push(row.storage_path);
+    byBucket.set(bucket, list);
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error: rmErr } = await supabaseAdmin.storage.from(bucket).remove(paths);
+    if (rmErr) {
+      console.warn("[cleanupExpiredProjectFiles] remove", bucket, rmErr);
+    }
+  }
+
+  const { error: delErr } = await supabaseAdmin
+    .from("project_files")
+    .delete()
+    .eq("project_id", projectId)
+    .eq("status", "expired");
+  if (delErr) {
+    console.warn("[cleanupExpiredProjectFiles] delete", delErr);
+  }
+}
+
 // ----- listar arquivos -----
 export const listProjectFiles = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -111,6 +165,13 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
       throw clientError("A extensão não corresponde ao tipo do arquivo.");
     }
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Cleanup ANTES da contagem: expira pendências vencidas globalmente e
+    // remove objetos órfãos do Storage deste projeto, para não bloquear o
+    // limite por lixo antigo.
+    await cleanupExpiredProjectFiles(supabaseAdmin, data.project_id);
+
     // Limite de quantidade — só conta arquivos confirmados + pendentes ativos.
     const { count, error: countError } = await context.supabase
       .from("project_files")
@@ -128,15 +189,6 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const bucket = BUCKETS[data.file_type];
     const fileId = crypto.randomUUID();
     const storagePath = `${context.userId}/${data.project_id}/${fileId}/${safeName}`;
-
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    // Opportunistic cleanup: expira pendências vencidas antes de reservar nova.
-    try {
-      await supabaseAdmin.rpc("expire_pending_project_files");
-    } catch (e) {
-      console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
-    }
 
     const UPLOAD_TTL_SECONDS = 60 * 15;
     const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
@@ -216,6 +268,14 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     const bucket = BUCKETS[row.file_type as keyof typeof BUCKETS];
     if (!bucket) throw clientError("Tipo de arquivo desconhecido.");
 
+    // Path invariant: server-owned storage_path must start with
+    // `${userId}/${projectId}/${fileId}/` and have no traversal / double
+    // slash / backslash.
+    if (!isValidStoragePath(row.storage_path, context.userId, row.project_id, row.id)) {
+      console.error("[confirmProjectFile] invalid storage_path", row.storage_path);
+      throw clientError("Caminho de armazenamento inválido.");
+    }
+
     const parts = row.storage_path.split("/");
     const parentPath = parts.slice(0, -1).join("/");
     const objectName = parts[parts.length - 1];
@@ -245,18 +305,27 @@ export const confirmProjectFile = createServerFn({ method: "POST" })
     if (validation === "size_mismatch") {
       throw clientError("Tamanho do arquivo divergente do declarado.");
     }
+    if (validation === "mime_missing") {
+      throw clientError("Tipo do arquivo ausente no armazenamento.");
+    }
     if (validation === "mime_mismatch") {
       throw clientError("Tipo do arquivo divergente do declarado.");
     }
 
-    const { error: updErr } = await supabaseAdmin
+    // Transição atômica pending → uploaded. Se nenhuma linha muda
+    // (corrida com expiração / outra transição), recusa com erro seguro.
+    const { data: updated, error: updErr } = await supabaseAdmin
       .from("project_files")
       .update({ status: "uploaded", upload_expires_at: null })
       .eq("id", row.id)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .select("id");
     if (updErr) {
       console.error("[confirmProjectFile] update", updErr);
       throw clientError("Não foi possível registrar o arquivo.");
+    }
+    if (!updated || updated.length !== 1) {
+      throw clientError("Conflito ao confirmar o upload. Envie novamente.");
     }
     return { id: row.id };
   });
