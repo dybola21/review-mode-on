@@ -4,11 +4,14 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { RIGHTS_CONFIRMATION_VERSION } from "./project-schemas";
 import {
+  bucketForFileType,
   buildOutputStoragePath,
   computeMaxOutputs,
   normalizePublicAppUrl,
   sanitizeBaseName,
+  validateRenderInput,
 } from "./render-security";
+
 
 function clientError(msg: string): Error {
   return new Error(msg);
