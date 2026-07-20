@@ -160,8 +160,13 @@ export function RenderSection({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {diagnostics.data && ACTIVE.has(job.data?.status ?? "") && (
-        <DiagnosticsBlock d={diagnostics.data} />
+      {isActive && (
+        <DiagnosticsBlock
+          state={diagnostics.data}
+          isLoading={diagnostics.isPending || diagnostics.isFetching}
+          isError={diagnostics.isError}
+          onRefresh={() => diagnostics.refetch()}
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-2">
