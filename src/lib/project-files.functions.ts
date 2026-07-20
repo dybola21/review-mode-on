@@ -131,9 +131,12 @@ export const prepareProjectFileUpload = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Opportunistic cleanup: expira pendências vencidas antes de reservar nova.
-    await supabaseAdmin.rpc("expire_pending_project_files").catch((e: unknown) => {
+    try {
+      await supabaseAdmin.rpc("expire_pending_project_files");
+    } catch (e) {
       console.warn("[prepareProjectFileUpload] expire cleanup skipped", e);
-    });
+    }
+
 
     const UPLOAD_TTL_SECONDS = 60 * 15;
     const uploadExpiresAt = new Date(Date.now() + UPLOAD_TTL_SECONDS * 1000).toISOString();
