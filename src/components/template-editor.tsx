@@ -520,7 +520,20 @@ export function TemplateEditor({
           </div>
         </div>
 
-        <TemplatePreview9x16 template={tpl} headerUrl={headerUrl} logoUrl={logoUrl} />
+        <TemplatePreview9x16
+          template={tpl}
+          headerUrl={headerUrl}
+          logoUrl={logoUrl}
+          interactive
+          onPositionChange={(p) =>
+            setTpl((prev) => ({
+              ...prev,
+              header_image_position_x: p.x,
+              header_image_position_y: p.y,
+            }))
+          }
+        />
+
       </div>
     </div>
   );
