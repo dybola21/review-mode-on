@@ -103,13 +103,16 @@ export const checkWorkerHealth = createServerFn({ method: "GET" })
       const statusOk = parsed?.status === "ok";
       const ffmpegOk = parsed?.ffmpeg === true;
       const queueOk = parsed?.queue === "ready";
-      const ok = statusOk && ffmpegOk && queueOk;
+      const versionRaw = parsed?.version;
+      const versionOk = typeof versionRaw === "string" && versionRaw.trim().length > 0;
+      const ok = statusOk && ffmpegOk && queueOk && versionOk;
       return {
         configured: true,
         available: ok,
         checkedAt: new Date().toISOString(),
-        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg ou fila).",
+        message: ok ? "Servidor disponível." : "Servidor incompleto (FFmpeg, fila ou versão).",
       };
+
     } catch (err) {
       clearTimeout(timer);
       console.error("[checkWorkerHealth]", err);
