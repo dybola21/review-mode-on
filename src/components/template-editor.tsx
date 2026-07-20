@@ -1,29 +1,58 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, RefreshCw, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { TemplatePreview9x16 } from "@/components/template-preview";
+import type { getAppSettings } from "@/lib/app-settings.functions";
+import { useProjectFileUploader } from "@/lib/project-file-upload";
 import { updateTemplateSettings } from "@/lib/project-config.functions";
 import { getProjectFilePreviewUrl, listProjectFiles } from "@/lib/project-files.functions";
 import {
   DEFAULT_TEMPLATE_SETTINGS,
+  extensionMatchesMime,
+  sanitizeFileName,
   templateSettingsSchema,
   type TemplateSettings,
 } from "@/lib/project-schemas";
+
+type Settings = Awaited<ReturnType<typeof getAppSettings>>;
 
 const MIN_HEADER_RATIO = 0.2;
 const MAX_HEADER_RATIO = 0.4;
 const DEFAULT_HEADER_RATIO = 0.335;
 
-export function TemplateEditor({ projectId, initial }: { projectId: string; initial: unknown }) {
+// Formatos permitidos para arte do cabeçalho.
+const HEADER_ART_MIMES = ["image/png", "image/jpeg", "image/webp"];
+
+type HeaderUpload = {
+  key: string;
+  file: File;
+  status: "uploading" | "confirming" | "done" | "error" | "canceled";
+  progress: number;
+  error?: string;
+  abort?: AbortController;
+};
+
+export function TemplateEditor({
+  projectId,
+  initial,
+  settings,
+}: {
+  projectId: string;
+  initial: unknown;
+  settings: Settings;
+}) {
   const parsed = templateSettingsSchema.safeParse(initial);
   const [tpl, setTpl] = useState<TemplateSettings>(
     parsed.success ? parsed.data : DEFAULT_TEMPLATE_SETTINGS,
   );
 
+  const qc = useQueryClient();
   const saveFn = useServerFn(updateTemplateSettings);
   const listFn = useServerFn(listProjectFiles);
   const previewFn = useServerFn(getProjectFilePreviewUrl);
+  const uploader = useProjectFileUploader();
 
   const filesQuery = useQuery({
     queryKey: ["project-files", projectId],
