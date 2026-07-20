@@ -38,14 +38,26 @@ describe("createSupabaseClient integrates the key guard", () => {
   });
 
   it("throws at first use when the publishable env holds a sb_secret_* value", async () => {
+    const prev = {
+      url: process.env.VITE_SUPABASE_URL,
+      key: process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      urlSSR: process.env.SUPABASE_URL,
+      keySSR: process.env.SUPABASE_PUBLISHABLE_KEY,
+    };
+    process.env.VITE_SUPABASE_URL = "https://x.supabase.co";
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY = "sb_secret_leak";
     process.env.SUPABASE_URL = "https://x.supabase.co";
     process.env.SUPABASE_PUBLISHABLE_KEY = "sb_secret_leak";
-    // Fresh dynamic import; the Proxy is instantiated on first .get.
-    const mod = await import("./client");
-    expect(() =>
-      (mod.supabase as unknown as { from: (t: string) => unknown }).from("projects"),
-    ).toThrow(/SECURITY/);
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    try {
+      const mod = await import(`./client?leak=${Date.now()}`);
+      expect(() =>
+        (mod.supabase as unknown as { from: (t: string) => unknown }).from("projects"),
+      ).toThrow(/SECURITY/);
+    } finally {
+      process.env.VITE_SUPABASE_URL = prev.url;
+      process.env.VITE_SUPABASE_PUBLISHABLE_KEY = prev.key;
+      process.env.SUPABASE_URL = prev.urlSSR;
+      process.env.SUPABASE_PUBLISHABLE_KEY = prev.keySSR;
+    }
   });
 });
