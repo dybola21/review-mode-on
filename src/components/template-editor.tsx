@@ -121,9 +121,23 @@ export function TemplateEditor({
       if (id && prev.header_height_ratio < MIN_HEADER_RATIO) {
         next.header_height_ratio = DEFAULT_HEADER_RATIO;
       }
+      // Ao trocar a imagem, sempre voltar para o centro.
+      if (id !== prev.header_image_file_id) {
+        next.header_image_position_x = 0.5;
+        next.header_image_position_y = 0.5;
+      }
       return next;
     });
   }
+
+  function centerHeaderImage() {
+    setTpl((prev) => ({
+      ...prev,
+      header_image_position_x: 0.5,
+      header_image_position_y: 0.5,
+    }));
+  }
+
 
   // -------- Upload direto da arte do cabeçalho --------
   const [headerUpload, setHeaderUpload] = useState<HeaderUpload | null>(null);
