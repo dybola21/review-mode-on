@@ -178,7 +178,11 @@ function EditProjectPage() {
       {settingsQuery.data && (
         <div className="mt-6 space-y-6">
           <ProjectFilesSection projectId={projectId} settings={settingsQuery.data} />
-          <TemplateEditor projectId={projectId} initial={project.template_settings} />
+          <TemplateEditor
+            projectId={projectId}
+            initial={project.template_settings}
+            settings={settingsQuery.data}
+          />
           <VariationsEditor
             projectId={projectId}
             initial={project.variation_settings}
