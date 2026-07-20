@@ -535,6 +535,12 @@ export const submitRenderJob = createServerFn({ method: "POST" })
     } catch (err) {
       console.error("[submitRenderJob] sign inputs", err);
       await failJob("sign_failed", "Falha ao preparar arquivos.");
+      await cleanupJobArtifactsSafely();
+      logSubmit("submission_failed", {
+        projectId: data.project_id,
+        jobId,
+        code: "sign_failed",
+      });
       throw clientError("Não foi possível iniciar o processamento.");
     }
 
