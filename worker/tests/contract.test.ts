@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { CONTRACT_VERSION, jobPayloadSchema } from "../src/types/contract.js";
 
+const HEADER_ID = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
 const base = {
   contractVersion: CONTRACT_VERSION,
   jobId: "11111111-1111-1111-1111-111111111111",
@@ -14,6 +16,13 @@ const base = {
       mimeType: "video/mp4",
       signedUrl: "https://files.example.com/src",
     },
+    {
+      fileId: HEADER_ID,
+      fileName: "header.png",
+      fileType: "template_asset" as const,
+      mimeType: "image/png",
+      signedUrl: "https://files.example.com/header",
+    },
   ],
   outputTargets: [
     {
@@ -25,6 +34,7 @@ const base = {
     },
   ],
   templateSettings: {
+    header_image_file_id: HEADER_ID,
     page_name: "",
     identifier: "",
     headline: "",
