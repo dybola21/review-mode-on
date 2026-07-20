@@ -20,6 +20,8 @@ import { buildTemplateOverlay, assertTemplateSafe } from "./template.js";
 import { renderOutput, RenderError } from "./ffmpeg.js";
 import { computeVariationParams, computeWatermarkOffset } from "./variation.js";
 import { renewInputUrl, renewUploadUrl } from "../webhook/renew.js";
+import { verifyRemoteOutput } from "../webhook/verify.js";
+
 import { enqueueWebhook } from "../webhook/sender.js";
 import type { Config } from "../config.js";
 import { pinoLogger } from "../logger.js";
