@@ -272,6 +272,16 @@ export async function runJob(
     });
     log.info("job completed");
   } catch (err) {
+    if (err instanceof RecoveryDeferError) {
+      log.warn(
+        { workerOutputId: err.workerOutputId },
+        "recovery verification transient — requeueing job without failing",
+      );
+      db.requeueForRecovery(row.worker_job_id);
+      // Intentionally NO fail() and NO failed webhook — the scheduler
+      // will pick the job up again on the next tick.
+      return;
+    }
     const { code, message } = classifyError(err);
     log.warn({ code }, "job failed");
     fail(db, row, code, message);
