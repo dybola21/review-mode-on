@@ -96,6 +96,17 @@ export async function runJob(
 
   const heartbeat = new WallClockLimit(jobHardMs);
 
+  // Periodic heartbeat while the job is active (every 5s). Ensures the
+  // scheduler watchdog can distinguish a live job doing long blocking I/O
+  // from a stuck one.
+  const heartbeatInterval = setInterval(() => {
+    try {
+      db.heartbeat(row.worker_job_id);
+    } catch {
+      /* noop */
+    }
+  }, 5_000);
+
   log.info(
     { inputs: payload.inputFiles.length, outputs: payload.outputTargets.length },
     "job_claimed",
