@@ -368,9 +368,7 @@ export class QueueDB {
 
   /** Rows currently in 'processing' — used by the scheduler watchdog. */
   listProcessing(): QueueRow[] {
-    return this.db
-      .prepare<[], QueueRow>(`SELECT * FROM jobs WHERE status = 'processing'`)
-      .all();
+    return this.db.prepare<[], QueueRow>(`SELECT * FROM jobs WHERE status = 'processing'`).all();
   }
 
   // -------------------------------------------------------------------

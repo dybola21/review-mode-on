@@ -80,10 +80,7 @@ export class Scheduler {
         }
         if (!row) break;
 
-        const waitedSec = Math.max(
-          0,
-          Math.round((Date.now() - Date.parse(row.created_at)) / 1000),
-        );
+        const waitedSec = Math.max(0, Math.round((Date.now() - Date.parse(row.created_at)) / 1000));
         const counts = safeCounts(this.db);
         pinoLogger.info(
           {

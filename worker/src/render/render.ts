@@ -511,9 +511,7 @@ export class RecoveryDeferError extends Error {
 }
 
 export type VerifyRetryResult =
-  | { kind: "ok"; exists: boolean; size: number }
-  | { kind: "auth" }
-  | { kind: "transient" };
+  { kind: "ok"; exists: boolean; size: number } | { kind: "auth" } | { kind: "transient" };
 
 export function decideRecoveryAction(
   v: VerifyRetryResult,
