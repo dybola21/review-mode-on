@@ -138,7 +138,6 @@ export function TemplateEditor({
     }));
   }
 
-
   // -------- Upload direto da arte do cabeçalho --------
   const [headerUpload, setHeaderUpload] = useState<HeaderUpload | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -436,7 +435,6 @@ export function TemplateEditor({
             </Field>
           </div>
 
-
           <div className="rounded-md border border-border p-3">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Marca d&apos;água (opcional)
@@ -533,7 +531,6 @@ export function TemplateEditor({
             }))
           }
         />
-
       </div>
     </div>
   );
